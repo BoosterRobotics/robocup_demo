@@ -108,7 +108,7 @@ void CalibrationNode::Init(const std::string cfg_path, bool is_offline, std::str
         intr_ = Intrinsics(cfg_node_["camera"]["intrin"]);
         p_eye2head_ = as_or<Pose>(cfg_node_["camera"]["extrin"], Pose());
     }
-    std::cout << "intrinsics: " << intr_ << std::endl;
+    std::cout << "intrinsics from yaml\n: " << intr_ << std::endl;
 
     calibration_mode_ = calibration_mode;
 
@@ -449,6 +449,7 @@ void CalibrationNode::CameraInfoCallback(const sensor_msgs::msg::CameraInfo::Sha
         camera_info_sub_.reset();
         std::cout << "disable camera info callback" << std::endl;
         // update board_detector
+        std::cout << "updated camera intrinsics: \n" << intr_ << std::endl;
         board_detector_ = std::make_shared<BoardDetector>(cv::Size(board_w_, board_h_), board_square_size_, intr_);
     }
 }

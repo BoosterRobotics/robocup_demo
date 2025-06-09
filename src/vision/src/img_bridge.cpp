@@ -85,6 +85,44 @@ int getCvType(const std::string &encoding) {
 namespace booster_vision {
 
 cv::Mat toCVMat(const sensor_msgs::msg::Image &source) {
+    // Special handling for MONO16 (depth images)
+    if (source.encoding == enc::MONO16) {
+        int width = source.width;
+        int height = source.height;
+        
+        // Create a Mat and copy the data
+        cv::Mat depth_mat(height, width, CV_16UC1);
+        memcpy(depth_mat.data, source.data.data(), source.data.size());
+        
+        // Handle endianness if needed
+        if ((rcpputils::endian::native == rcpputils::endian::big && !source.is_bigendian) ||
+            (rcpputils::endian::native == rcpputils::endian::little && source.is_bigendian)) {
+            // Swap bytes for each 16-bit value
+            for (int i = 0; i < depth_mat.rows; i++) {
+                uint16_t* row = depth_mat.ptr<uint16_t>(i);
+                for (int j = 0; j < depth_mat.cols; j++) {
+                    row[j] = (row[j] >> 8) | (row[j] << 8);
+                }
+            }
+        }
+        return depth_mat;
+    }
+
+    // special handling for bgra8
+    if (source.encoding == enc::BGRA8) {
+        int width = source.width;
+        int height = source.height;
+
+        // Create a cv::Mat for the BGRA data
+        cv::Mat bgra_mat(height, width, CV_8UC4);
+        std::memcpy(bgra_mat.data, source.data.data(), source.data.size());
+
+        // Convert BGRA to BGR format
+        cv::Mat bgr_mat;
+        cv::cvtColor(bgra_mat, bgr_mat, cv::COLOR_BGRA2BGR);
+        return bgr_mat;
+    }
+
     int source_type = getCvType(source.encoding);
     int byte_depth = enc::bitDepth(source.encoding) / 8;
     int num_channels = enc::numChannels(source.encoding);
