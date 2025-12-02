@@ -18,7 +18,7 @@ class RobotClient
 public:
     RobotClient(Brain *argBrain) : brain(argBrain) {}
 
-    void init();
+    void init(string robot_name);
 
     /**
      * @brief Move the robot's head.
@@ -29,6 +29,11 @@ public:
      * @return int, 0 indicates successful execution.
      */
     int moveHead(double pitch, double yaw);
+
+    /**
+     * @brief 恢复行走模式
+     */
+    int walkMode();
 
     /**
      * @brief Set the moving speed of the robot.

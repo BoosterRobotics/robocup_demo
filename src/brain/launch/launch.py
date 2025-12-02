@@ -35,6 +35,10 @@ def handle_configuration(context, *args, **kwargs):
     if sim in ['true', 'True', '1']:
         config['use_sim_time'] = True
 
+    robot_name = context.perform_substitution(LaunchConfiguration('robot_name'))
+    if not robot_name == '':
+        config['robot.robot_name'] = robot_name
+
     return [
         Node(
             package ='brain',
@@ -67,10 +71,16 @@ def generate_launch_description():
             default_value='',
             description='If you need to override the game.player_role in the config.yaml, you can specify the parameter role:=striker when launching'
         ),
-         DeclareLaunchArgument(
+        DeclareLaunchArgument(
             'sim', 
             default_value='false',
             description='If it is in sim-env'
         ),
+        DeclareLaunchArgument(
+            'robot_name',
+            default_value='',
+            description='Name of the robot to use in multi-robot setup'
+        ),
+
         OpaqueFunction(function=handle_configuration)
     ])

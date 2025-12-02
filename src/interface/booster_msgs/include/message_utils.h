@@ -52,6 +52,18 @@ namespace booster_msgs
         return msg;
     }
 
+    msg::RpcReqMsg ConstructMsgDir(int64_t api_id, nlohmann::json json_body)
+    {
+        msg::RpcReqMsg msg;
+
+        nlohmann::json json_header;
+        json_header["api_id"] = static_cast<int64_t>(api_id);
+        msg.uuid = GenUUID();
+        msg.header = json_header.dump();
+        msg.body = json_body.dump();
+        return msg;
+    }
+
     msg::RpcReqMsg CreateChangeModeMsg(booster::robot::RobotMode mode)
     {
         nlohmann::json body;
@@ -101,4 +113,5 @@ namespace booster_msgs
     {
         return ConstructMsg(booster::robot::b1::LocoApiId::kGetUp, "");
     }
+
 }

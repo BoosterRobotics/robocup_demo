@@ -19,6 +19,7 @@ Brain::Brain() : rclcpp::Node("brain_node")
     declare_parameter<string>("game.player_role", "");
     declare_parameter<string>("game.player_start_pos", "");
 
+    declare_parameter<string>("robot.robot_name", "");
     declare_parameter<double>("robot.robot_height", 1.0);
     declare_parameter<double>("robot.odom_factor", 1.0);
     declare_parameter<double>("robot.vx_factor", 0.95);
@@ -50,7 +51,7 @@ void Brain::init()
 
     tree->init();
 
-    client->init();
+    client->init(config->robotName);
 
     log->prepare();
 
@@ -58,11 +59,17 @@ void Brain::init()
 
     joySubscription = create_subscription<sensor_msgs::msg::Joy>("/joy", 10, bind(&Brain::joystickCallback, this, _1));
     gameControlSubscription = create_subscription<game_controller_interface::msg::GameControlData>("/robocup/game_controller", 1, bind(&Brain::gameControlCallback, this, _1));
-    detectionsSubscription = create_subscription<vision_interface::msg::Detections>("/booster_vision/detection", 1, bind(&Brain::detectionsCallback, this, _1));
-    odometerSubscription = create_subscription<booster_interface::msg::Odometer>("/odometer_state", 1, bind(&Brain::odometerCallback, this, _1));
-    lowStateSubscription = create_subscription<booster_interface::msg::LowState>("/low_state", 1, bind(&Brain::lowStateCallback, this, _1));
-    imageSubscription = create_subscription<sensor_msgs::msg::Image>("/camera/camera/color/image_raw", 1, bind(&Brain::imageCallback, this, _1));
-    headPoseSubscription = create_subscription<geometry_msgs::msg::Pose>("/head_pose", 1, bind(&Brain::headPoseCallback, this, _1));
+    
+    string topic_suffix = "";
+    if(config->robotName != "") {
+        RCLCPP_INFO(this->get_logger(), "Robot name set to: %s", config->robotName.c_str());
+        topic_suffix = "/" + config->robotName;
+    }
+    detectionsSubscription = create_subscription<vision_interface::msg::Detections>("/booster_vision/detection" + topic_suffix, 1, bind(&Brain::detectionsCallback, this, _1));
+    odometerSubscription = create_subscription<booster_interface::msg::Odometer>("/odometer_state" + topic_suffix, 1, bind(&Brain::odometerCallback, this, _1));
+    lowStateSubscription = create_subscription<booster_interface::msg::LowState>("/low_state" + topic_suffix, 1, bind(&Brain::lowStateCallback, this, _1));
+    imageSubscription = create_subscription<sensor_msgs::msg::Image>("/camera/camera/color/image_raw" + topic_suffix, 1, bind(&Brain::imageCallback, this, _1));
+    headPoseSubscription = create_subscription<geometry_msgs::msg::Pose>("/head_pose" + topic_suffix, 1, bind(&Brain::headPoseCallback, this, _1));
 }
 
 void Brain::loadConfig()
@@ -73,6 +80,7 @@ void Brain::loadConfig()
     get_parameter("game.player_role", config->playerRole);
     get_parameter("game.player_start_pos", config->playerStartPos);
 
+    get_parameter("robot.robot_name", config->robotName);
     get_parameter("robot.robot_height", config->robotHeight);
     get_parameter("robot.odom_factor", config->robotOdomFactor);
     get_parameter("robot.vx_factor", config->vxFactor);

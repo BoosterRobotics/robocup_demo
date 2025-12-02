@@ -61,6 +61,7 @@ void BrainConfig::print(ostream &os)
     os << "playerRole = " << playerRole << endl;
     os << "playerStartPos = " << playerStartPos << endl;
     os << "----------------------------------------" << endl;
+    os << "robotName = " << robotName << endl;
     os << "robotHeight = " << robotHeight << endl;
     os << "robotOdomFactor = " << robotOdomFactor << endl;
     os << "vxFactor = " << vxFactor << endl;

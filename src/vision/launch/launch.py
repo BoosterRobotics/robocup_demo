@@ -16,6 +16,10 @@ def handle_configuration(context, *args, **kwargs):
         config['use_sim_time'] = True
         config_file = config_sim_file
 
+    robot_name = context.perform_substitution(LaunchConfiguration('robot_name'))
+    if not robot_name == '':
+        config['robot_name'] = robot_name
+
     return [
         Node(
             package='vision',
@@ -33,6 +37,12 @@ def generate_launch_description():
             'sim', 
             default_value='false',
             description='if it is in sim'
+        ),
+
+        DeclareLaunchArgument(
+            'robot_name', 
+            default_value='',
+            description='name of the robot'
         ),
         OpaqueFunction(function=handle_configuration)
     ])

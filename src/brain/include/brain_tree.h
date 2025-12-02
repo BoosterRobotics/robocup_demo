@@ -301,6 +301,25 @@ private:
     Brain *brain;
 };
 
+// ToWalkMode: 
+class ToWalkMode : public SyncActionNode
+{
+public:
+    ToWalkMode(const std::string &name, const NodeConfig &config, Brain *_brain) : SyncActionNode(name, config), brain(_brain) {}
+
+    static BT::PortsList providedPorts()
+    {
+        return {
+          
+        };
+    }
+
+    BT::NodeStatus tick() override;
+
+private:
+    Brain *brain;
+};
+
 /**
  * @brief Set the robot's velocity.
  *

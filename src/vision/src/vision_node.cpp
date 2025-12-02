@@ -35,6 +35,12 @@ void VisionNode::Init(const std::string &cfg_template_path, const std::string &c
 
     show_res_ = as_or<bool>(node["show_res"], false);
 
+    this->declare_parameter<std::string>("robot_name", "");
+    std::string robot_name = "";
+    this->get_parameter("robot_name", robot_name);
+    std::cout << "robot_name: " << robot_name << std::endl;
+    std::string robot_prefix = robot_name != "" ? ("/" + robot_name) : "";
+    std::cout << "robot_prefix: " << robot_prefix << std::endl;
     // read camera param
     if (!node["camera"]) {
         std::cerr << "no camera param found here" << std::endl;
@@ -77,16 +83,16 @@ void VisionNode::Init(const std::string &cfg_template_path, const std::string &c
     }
 
     // init ros related
-    std::string color_topic = "/camera/camera/color/image_raw";
-    std::string depth_topic = "/camera/camera/aligned_depth_to_color/image_raw";
+    std::string color_topic = "/camera/camera/color/image_raw" + robot_prefix;
+    std::string depth_topic = "/camera/camera/aligned_depth_to_color/image_raw" + robot_prefix;
 
     it_ = std::make_shared<image_transport::ImageTransport>(shared_from_this());
     color_sub_ = it_->subscribe(color_topic, 1, std::bind(&VisionNode::ColorCallback, this, std::placeholders::_1));
     depth_sub_ = it_->subscribe(depth_topic, 1, std::bind(&VisionNode::DepthCallback, this, std::placeholders::_1));
 
-    detection_pub_ = this->create_publisher<vision_interface::msg::Detections>("/booster_vision/detection", rclcpp::QoS(1));
+    detection_pub_ = this->create_publisher<vision_interface::msg::Detections>("/booster_vision/detection" + robot_prefix, rclcpp::QoS(1));
 
-    pose_sub_ = this->create_subscription<geometry_msgs::msg::Pose>("/head_pose", 10, std::bind(&VisionNode::PoseCallBack, this, std::placeholders::_1));
+    pose_sub_ = this->create_subscription<geometry_msgs::msg::Pose>("/head_pose" + robot_prefix, 10, std::bind(&VisionNode::PoseCallBack, this, std::placeholders::_1));
 }
 
 void VisionNode::ColorCallback(const sensor_msgs::msg::Image::ConstSharedPtr &msg) {

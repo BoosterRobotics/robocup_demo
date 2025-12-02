@@ -33,6 +33,7 @@ public:
     string playerRole;     // Corresponds to game.player_role   "striker" | "goal_keeper"
     string playerStartPos; // Corresponds to game.player_start_post  "left" | "right"
 
+    string robotName;      // Corresponds to robot.robot_name  Name of the robot to use in multi-robot setup
     double robotHeight;     // Corresponds to robot.robot_height
     double robotOdomFactor; // Corresponds to robot.odom_factor odom
     double vxFactor;        // Corresponds to robot.vx_factor fix the issue where the actual vx is larger than the command

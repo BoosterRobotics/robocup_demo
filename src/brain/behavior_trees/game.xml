@@ -28,6 +28,7 @@
                             <CamScanField _while="!odom_calibrated"/>
                             <SubTree ID="CamFindAndTrackBall" _autoremap="true" _while="odom_calibrated" />
                             <SelfLocate mode="enter_field" />
+                            <ToWalkMode />
                         </ReactiveSequence>
 
                         <ReactiveSequence _while="gc_game_state=='READY'" name="ready">

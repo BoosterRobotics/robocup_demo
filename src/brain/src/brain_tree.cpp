@@ -33,6 +33,7 @@ void BrainTree::init()
     REGISTER_BUILDER(CamFindBall)
     REGISTER_BUILDER(CamScanField)
     REGISTER_BUILDER(SelfLocate)
+    REGISTER_BUILDER(ToWalkMode)
     REGISTER_BUILDER(SetVelocity)
     REGISTER_BUILDER(MoveToPoseOnField)
     REGISTER_BUILDER(GoalieDecide)
@@ -69,7 +70,7 @@ void BrainTree::initEntry()
     setEntry<bool>("gc_is_under_penalty", false);
 
     setEntry<bool>("treat_person_as_robot", false);
-    setEntry<int>("control_state", 0);
+    setEntry<int>("control_state", 3);
     setEntry<bool>("B_pressed", false);
 
     setEntry<bool>("we_just_scored", false);
@@ -626,6 +627,12 @@ NodeStatus SelfLocate::tick()
     brain->data->lastSuccessfulLocalizeTime = brain->get_clock()->now();
     prtDebug("locate success: " + to_string(res.pose.x) + " " + to_string(res.pose.y) + " " + to_string(rad2deg(res.pose.theta)) + " Dur: " + to_string(res.msecs));
 
+    return NodeStatus::SUCCESS;
+}
+
+NodeStatus ToWalkMode::tick()
+{
+    brain->client->walkMode();
     return NodeStatus::SUCCESS;
 }
 

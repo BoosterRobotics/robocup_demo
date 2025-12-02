@@ -9,9 +9,10 @@
 
 #include "booster_msgs/message_utils.h"
 
-void RobotClient::init()
+void RobotClient::init(string robot_name)
 {
-    publisher = brain->create_publisher<booster_msgs::msg::RpcReqMsg>("LocoApiTopicReq", 10);
+    string suffix = robot_name.empty() ? "" : ("/" + robot_name);
+    publisher = brain->create_publisher<booster_msgs::msg::RpcReqMsg>("LocoApiTopic" + suffix + "Req", 10);
 }
 
 int RobotClient::moveHead(double pitch, double yaw)
@@ -27,6 +28,14 @@ int RobotClient::moveHead(double pitch, double yaw)
 int RobotClient::waveHand(bool doWaveHand)
 {
     auto msg = booster_msgs::CreateWaveHandMsg(booster::robot::b1::HandIndex::kRightHand, doWaveHand ? booster::robot::b1::HandAction::kHandOpen : booster::robot::b1::HandAction::kHandClose);
+    publisher->publish(msg);
+    return 0;
+}
+
+int RobotClient::walkMode()
+{
+    // msg.api_id = static_cast<int64_t>(booster_internal::robot::b1::LocoInternalApiId::kEnableRobocupWalkMode);
+    auto msg = booster_msgs::ConstructMsgDir(100008, "{}"); //booster::robot::b1::LocoApiId::kEnableRobocupWalkMode
     publisher->publish(msg);
     return 0;
 }

@@ -1,11 +1,11 @@
 brain_node:
   ros__parameters:
     game:
-      team_id: 29 # consistant with GameControl
+      team_id: 14 # consistant with GameControl
       player_id: 0 # 0 | 1 | 2 | 3
       field_type: "adult_size" # adult_size | kid_size 
       player_role: "striker" # striker | goal_keeper
-      player_start_pos: "left" # right | left
+      player_start_pos: "right" # right | left
       
     robot:
       robot_height: 1.0
