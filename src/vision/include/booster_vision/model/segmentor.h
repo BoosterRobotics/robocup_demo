@@ -25,6 +25,14 @@ public:
         return confidence_;
     }
 
+    void setNMSThreshold(float nms_threshold) {
+        nms_threshold_ = nms_threshold;
+    }
+
+    float getNMSThreshold() {
+        return nms_threshold_;
+    }
+
     std::string getModelPath() {
         return model_path_;
     }
@@ -38,6 +46,7 @@ protected:
         model_path_(name), confidence_(conf) {
     }
     float confidence_ = 0.2f;
+    float nms_threshold_ = 0.4f;
     std::string model_path_;
 };
 

@@ -1,7 +1,11 @@
+#include <NvInferVersion.h>
+
+#if (NV_TENSORRT_MAJOR == 8) && (NV_TENSORRT_MINOR == 6)
+
 #include <algorithm>
 #include <iostream>  // Include this header for printing
-#include "booster_vision/model//trt/postprocess.h"
-#include "booster_vision/model//trt/utils.h"
+#include "booster_vision/model/trt/postprocess.h"
+#include "booster_vision/model/trt/utils.h"
 
 cv::Rect get_rect(cv::Mat& img, float bbox[4]) {
     float l, r, t, b;
@@ -505,3 +509,5 @@ void draw_bbox_obb(std::vector<cv::Mat>& img_batch, std::vector<std::vector<Dete
         }
     }
 }
+
+#endif

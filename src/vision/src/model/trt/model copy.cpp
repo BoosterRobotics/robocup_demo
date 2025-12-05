@@ -6,8 +6,6 @@
 #include "booster_vision/model//trt/config.h"
 #include "booster_vision/model//trt/model.h"
 
-#if (NV_TENSORRT_MAJOR == 8) && (NV_TENSORRT_MINOR == 6)
-
 static int get_width(int x, float gw, int max_channels, int divisor = 8) {
     auto channel = int(ceil((x * gw) / divisor)) * divisor;
     return channel >= max_channels ? max_channels : channel;
@@ -1259,5 +1257,3 @@ nvinfer1::IHostMemory* buildEngineYolov8Seg(nvinfer1::IBuilder* builder, nvinfer
     }
     return serialized_model;
 }
-
-#endif

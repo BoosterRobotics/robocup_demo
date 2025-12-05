@@ -26,6 +26,14 @@ public:
         return confidence_;
     }
 
+    void setNMSThreshold(float nms_threshold) {
+        nms_threshold_ = nms_threshold;
+    }
+
+    float getNMSThreshold() {
+        return nms_threshold_;
+    }
+
     std::string getModelPath() {
         return model_path_;
     }
@@ -35,12 +43,13 @@ public:
     static const std::vector<std::string> kClassLabels;
 
 protected:
-    YoloV8Detector(const std::string &model_path, const float &conf) :
-        model_path_(model_path), confidence_(conf) {
+    YoloV8Detector(const std::string &model_path) :
+        model_path_(model_path) {
     }
 
     std::string model_path_;
-    float confidence_;
+    float confidence_ = 0.25f;
+    float nms_threshold_ = 0.4f;
 };
 
 } // namespace booster_vision

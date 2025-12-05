@@ -6,6 +6,9 @@
 #include "booster_vision/model//trt/config.h"
 #include "booster_vision/model//trt/yololayer.h"
 
+
+#if (NV_TENSORRT_MAJOR == 8) && (NV_TENSORRT_MINOR == 6)
+
 int calculateP(int ksize) {
     return ksize / 3;
 }
@@ -302,3 +305,4 @@ nvinfer1::IPluginV2Layer* addYoLoLayer(nvinfer1::INetworkDefinition* network,
     return yoloLayer;  // Return the added YOLO layer.
 }
 
+#endif
