@@ -19,7 +19,7 @@ def generate_launch_description():
                     "enable_ip_white_list": True,
 
                     "ip_white_list": [
-                        "192.168.200.28",
+                        "192.168.10.10",
                     ],
                 }
             ]

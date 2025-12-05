@@ -10,11 +10,21 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(sensor_msgs REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/DetectedObject.msg"
   "msg/Detections.msg"
-  DEPENDENCIES std_msgs builtin_interfaces
+  "msg/LineSegments.msg"
+  "msg/CalParam.msg"
+  "msg/DetectionsTrack.msg"
+  "msg/SegmentationPoint.msg"
+  "msg/SegmentationLine.msg"
+  "msg/SegmentationResult.msg"
+  "msg/ImageHeadPosition.msg"
+  "msg/Ball.msg"
+  DEPENDENCIES std_msgs builtin_interfaces geometry_msgs sensor_msgs
 )
 
 if(BUILD_TESTING)

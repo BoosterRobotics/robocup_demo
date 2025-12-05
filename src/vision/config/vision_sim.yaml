@@ -17,8 +17,11 @@ camera:
   yaw_compensation: 0.0
   z_compensation: 0.0
 detection_model:
-  model_path: "./src/vision/model/best_ada.engine"
+  # model_path: "./src/vision/model/best_ada.engine"
+  model_path: "./src/vision/model/best_orin_10.3.engine"
+
   confidence_threshold: 0.2
+  nms_threshold: 0.4
 use_depth: true
 ball_pose_estimator:
   use_depth: false

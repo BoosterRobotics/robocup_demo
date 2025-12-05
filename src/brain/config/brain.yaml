@@ -1,13 +1,14 @@
 brain_node:
   ros__parameters:
     game:
-      team_id: 14 # consistant with GameControl
+      team_id: 29 # consistant with GameControl
       player_id: 0 # 0 | 1 | 2 | 3
       field_type: "adult_size" # adult_size | kid_size 
       player_role: "striker" # striker | goal_keeper
-      player_start_pos: "right" # right | left
+      player_start_pos: "left" # right | left
       
     robot:
+      robot_name: "t1_red"
       robot_height: 1.0
       odom_factor: 1.2
       vx_factor: 0.90
@@ -15,6 +16,6 @@ brain_node:
       joystick: "logitech" # logitech | beitong
 
     rerunLog:
-      enable: false
-      server_addr: "127.0.0.1:9876"
+      enable: true
+      server_addr: "192.168.10.10:9876"
       img_interval: 1

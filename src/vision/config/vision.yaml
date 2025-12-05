@@ -19,6 +19,7 @@ camera:
 detection_model:
   model_path: "./src/vision/model/best_orin_old.engine"
   confidence_threshold: 0.2
+  nms_threshold: 0.4
 use_depth: true
 ball_pose_estimator:
   use_depth: false

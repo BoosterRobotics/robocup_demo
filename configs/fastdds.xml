@@ -6,9 +6,9 @@
             <transport_id>UdpTransport</transport_id>
             <type>UDPv4</type>
             <interfaceWhiteList>
-                <address>127.0.0.1</address>
-                <address>192.168.10.101</address>
-                <address>192.168.10.102</address>
+                <!-- <address>127.0.0.1</address> -->
+                <address>192.168.10.104</address>
+                <!-- <address>192.168.10.102</address> -->
 
             </interfaceWhiteList>
         </transport_descriptor>

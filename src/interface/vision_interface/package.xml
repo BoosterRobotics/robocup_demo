@@ -3,7 +3,7 @@
 <package format="3">
   <name>vision_interface</name>
   <version>1.0.0</version>
-  <description>vision interface</description>
+  <description>booset vision interface</description>
   <maintainer email="lishuai@boosterobotics.com">lishuai</maintainer>
   <license>Apache-2.0</license>
 
@@ -11,6 +11,8 @@
 
   <depend>rclcpp</depend>
   <depend>std_msgs</depend>
+  <depend>sensor_msgs</depend>
+  <depend>geometry_msgs</depend>
   <member_of_group>rosidl_interface_packages</member_of_group>
   
 
