@@ -1,0 +1,4 @@
+sim_detection_bridge_node:
+  ros__parameters:
+    robot:
+      robot_name: "robot0"  # Will be overridden by launch configuration if provided

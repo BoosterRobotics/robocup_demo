@@ -8,7 +8,7 @@ brain_node:
       player_start_pos: "left" # right | left
       
     robot:
-      robot_name: "t1_red"
+      robot_name: "robot0"
       robot_height: 1.0
       odom_factor: 1.2
       vx_factor: 0.90
