@@ -632,7 +632,10 @@ NodeStatus SelfLocate::tick()
 
 NodeStatus ToWalkMode::tick()
 {
-    brain->client->walkMode();
+    auto timestamp = int(brain->get_clock()->now().nanoseconds() / 1e6);
+    if(timestamp % 1000 == 0) {
+        brain->client->walkMode();
+    }
     return NodeStatus::SUCCESS;
 }
 

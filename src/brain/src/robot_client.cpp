@@ -34,8 +34,9 @@ int RobotClient::waveHand(bool doWaveHand)
 
 int RobotClient::walkMode()
 {
-    // msg.api_id = static_cast<int64_t>(booster_internal::robot::b1::LocoInternalApiId::kEnableRobocupWalkMode);
-    auto msg = booster_msgs::ConstructMsgDir(100008, "{}"); //booster::robot::b1::LocoApiId::kEnableRobocupWalkMode
+    nlohmann::json json;
+    json["mode"] = static_cast<int>(4);
+    auto msg = booster_msgs::ConstructMsgDir(2000, json); //booster::robot::b1::LocoApiId::kEnableRobocupWalkMode
     publisher->publish(msg);
     return 0;
 }
