@@ -29,7 +29,7 @@ detection_model:
 vision.yaml for jetpack 6.2 machine
 ```yaml
 detection_model:
-  model_path: ""./src/vision/model/best_orin_10.3.engine"
+  model_path: "./src/vision/model/best_orin_10.3.engine"
   confidence_threshold: 0.2
 ```
 
