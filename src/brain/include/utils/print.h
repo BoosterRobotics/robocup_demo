@@ -50,7 +50,36 @@ inline string format(const char *str, ...)
     return string(buf);
 }
 
-// Print the string str enclosed in top and bottom borders, and return the input string itself
+// format to c_str helper
+inline const char* format2cstr(const char *str, ...)
+{
+    static thread_local char buf[1024];
+    va_list args;
+    va_start(args, str);
+    vsprintf(buf, str, args);
+    va_end(args);
+    return buf;
+}
+
+// Output a vector as a string in the form "[1.2, 3.4]" with the specified precision
+template<typename T>
+string vec2str(const vector<T>& vec, int precision = 2) {
+    ostringstream oss;
+    oss << fixed << setprecision(precision);
+
+    oss << "[";
+    for (size_t i = 0; i < vec.size(); ++i) {
+        oss << vec[i];
+        if (i < vec.size() - 1) {
+            oss << ", ";
+        }
+    }
+    oss << "]";
+
+    return oss.str();
+}
+
+// Print `str` wrapped with top/bottom borders and return the input string
 inline string prettyPrint(const string &str, const string &title = "", const string &colorCode = "", int borderLength = 70, char borderChar = '=')
 {
     int headerHalfLength = floor((borderLength - title.length() - 2) / 2);
@@ -66,19 +95,19 @@ inline string prettyPrint(const string &str, const string &title = "", const str
     return str;
 }
 
-// Print the string str enclosed in a prominent red block labeled "ERROR", and return the input string itself
+// Print `str` inside a prominent red block labeled ERROR and return the input string
 inline string prtErr(const string &str)
 {
     return prettyPrint(str, "ERROR", RED_CODE);
 }
 
-// Print the string str enclosed in a prominent block labeled "DEBUG", and return the input string itself
-inline string prtDebug(const string &str)
+// Print `str` inside a prominent block labeled DEBUG and return the input string
+inline string prtDebug(const string &str, string color = CYAN_CODE)
 {
-    return prettyPrint(str, "DEBUG", CYAN_CODE);
+    return prettyPrint(str, "DEBUG", color);
 }
 
-// Print the string str enclosed in a prominent block labeled "DEBUG", and return the input string itself.
+// Print `str` inside a prominent block labeled WARN and return the input string
 inline string prtWarn(const string &str)
 {
     return prettyPrint(str, "WARN", YELLOW_CODE);

@@ -1,0 +1,19 @@
+## 1.0.4 (2025.05.19)
+1. feature: add support for zed, orbbec and d-robotics camera
+2. feature: update detection model
+3. bugfix: incorrect classification result for realsense camera
+
+## 1.0.3 (2025.05.11)
+1. feature: add robot color classifier
+2. bugfix: incorrect online calibration results caused by shallow memory copy
+
+## 1.0.2 (2025.03.07)
+1. feature: save data when robot headpose is non-stationary
+2. feature: add multi-thread data logger
+3. misc: add in-house small-field finetune model and old model
+
+## 1.0.1 (2025.02.27)
+1. feature: add post-processing:
+   a. different confidence thresholds for each class.
+   b. use depth to filter out incorrect ball detection.
+   c. save vision_local.yaml when saving data is enabled

@@ -2,12 +2,12 @@
 #include <iterator>
 #include <fstream>
 #include <opencv2/dnn/dnn.hpp>
+
+#if (NV_TENSORRT_MAJOR == 8) && (NV_TENSORRT_MINOR == 6)
 #include "booster_vision/model/trt/calibrator.h"
 #include "booster_vision/model/trt/cuda_utils.h"
 #include "booster_vision/model/trt/utils.h"
 
-
-#if (NV_TENSORRT_MAJOR == 8) && (NV_TENSORRT_MINOR == 6)
 
 Int8EntropyCalibrator2::Int8EntropyCalibrator2(int batchsize, int input_w, int input_h, const char* img_dir, const char* calib_table_name,
                                                const char* input_blob_name, bool read_cache)

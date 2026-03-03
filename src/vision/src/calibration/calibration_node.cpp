@@ -25,12 +25,15 @@
 #include "booster_vision/base/intrin.h"
 #include "booster_vision/base/pose.h"
 #include "booster_vision/base/data_syncer.hpp"
+#include "booster_vision/base/data_logger.hpp"
 #include "booster_vision/base/misc_utils.hpp"
 #include "booster_vision/img_bridge.h"
 #include "booster_vision/calibration/optimizor.hpp"
 #include "booster_vision/calibration/calibration.h"
 #include "booster_vision/calibration/board_detector.h"
 #include "booster_vision/pose_estimator/pose_estimator.h"
+#include "booster_vision/pose_estimator/hungarian_matching.hpp"
+#include "booster_vision/model/detector.h"
 
 namespace booster_vision {
 
@@ -46,6 +49,7 @@ public:
     void CameraInfoCallback(const sensor_msgs::msg::CameraInfo::SharedPtr msg);
     void RunOfflineCalibrationProcess();
     void RunExtrinsicCalibrationProcess(const SyncedDataBlock &data_block);
+    void RunExtrinsicOffsetCalibrationProcess(const SyncedDataBlock &data_block);
 
 private:
     bool is_offline_ = false;
@@ -55,10 +59,12 @@ private:
     int board_h_ = 0;
     float board_square_size_ = 0.05;
     std::string calibration_mode_ = "handeye";
+    std::string color_topic_ = "";
+    std::string intrin_topic_ = "";
+    int sync_time_diff_ms_ = 1500; // ms
 
     std::string input_cfg_path_;
     std::string log_path_;
-    std::string camera_type_;
 
     YAML::Node cfg_node_;
 
@@ -74,9 +80,15 @@ private:
     rclcpp::Subscription<sensor_msgs::msg::CameraInfo>::SharedPtr camera_info_sub_;
 
     std::shared_ptr<DataSyncer> data_syncer_;
+    std::shared_ptr<DataLogger> data_logger_;
     std::vector<SyncedDataBlock> cali_data_;
 
     std::shared_ptr<BoardDetector> board_detector_;
+
+    std::shared_ptr<YoloV8Detector> detector_;
+    std::shared_ptr<PoseEstimator> pose_estimator_;
+    std::vector<MarkerCoordinates> gt_marker_coords_;
+    std::vector<std::vector<MarkerCoordinates>> marker_coords_vec_;
 
     // for display
     cv::Mat board_position_mask_;
@@ -101,16 +113,45 @@ void CalibrationNode::Init(const std::string cfg_path, bool is_offline, std::str
 
     input_cfg_path_ = cfg_path;
     cfg_node_ = YAML::LoadFile(cfg_path);
+    if (cfg_node_["calibration"] && cfg_node_["calibration"]["sync_max_time_diff_ms"]) {
+        sync_time_diff_ms_ = cfg_node_["calibration"]["sync_max_time_diff_ms"].as<int>();
+    }
+
     if (!cfg_node_["camera"]) {
         std::cerr << "no camera param found here" << std::endl;
         return;
     } else {
+        color_topic_ = cfg_node_["camera"]["color_topic"].as<std::string>();
+        intrin_topic_ = cfg_node_["camera"]["intrin_topic"].as<std::string>();
         intr_ = Intrinsics(cfg_node_["camera"]["intrin"]);
         p_eye2head_ = as_or<Pose>(cfg_node_["camera"]["extrin"], Pose());
     }
-    std::cout << "intrinsics from yaml\n: " << intr_ << std::endl;
+    std::cout << "intrinsics from yaml: \n" << intr_ << std::endl;
 
     calibration_mode_ = calibration_mode;
+    if (calibration_mode_ != "handeye") {
+        pose_estimator_ = std::make_shared<PoseEstimator>(intr_);
+        pose_estimator_->Init(YAML::Node());
+
+        detector_ = YoloV8Detector::CreateYoloV8Detector(cfg_node_["detection_model"], "");
+
+        if (!cfg_node_["calibration"]["offset"]) {
+            std::cerr << "no offset calibration param found here" << std::endl;
+            return;
+        } else {
+            std::string gt_marker_path = cfg_node_["calibration"]["offset"]["field_marker_path"].as<std::string>();
+            exclude_distance_ = cfg_node_["calibration"]["offset"]["exclude_distance"].as<double>();
+            zero_translation_ = cfg_node_["calibration"]["offset"]["zero_translation"].as<bool>();
+
+            gt_marker_coords_.clear();
+            YAML::Node field_node = YAML::LoadFile(gt_marker_path);
+            for (auto name : field_node) {
+                auto coordinate_node = name.second;
+                cv::Point3f coordinate(coordinate_node[0].as<float>(), coordinate_node[1].as<float>(), 0);
+                gt_marker_coords_.emplace_back(coordinate, name.first.as<std::string>());
+            }
+        }
+    }
 
     rclcpp::CallbackGroup::SharedPtr callback_group_sub_1 = this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
     rclcpp::CallbackGroup::SharedPtr callback_group_sub_2 = this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
@@ -119,26 +160,15 @@ void CalibrationNode::Init(const std::string cfg_path, bool is_offline, std::str
     auto sub_opt_2 = rclcpp::SubscriptionOptions();
     sub_opt_2.callback_group = callback_group_sub_2;
 
-    std::string color_topic;
-    std::string intrin_topic;
-    if (camera_type_ == "zed") {
-        color_topic = "/zed/zed_node/left/image_rect_color";
-        intrin_topic = "/zed/zed_node/left/camera_info";
-    } else {
-        // realsense
-        color_topic = "/camera/camera/color/image_raw";
-        intrin_topic = "/camera/camera/color/camera_info";
-    }
-
     it_ = std::make_shared<image_transport::ImageTransport>(shared_from_this());
-    color_sub_ = it_->subscribe(color_topic, 1, &CalibrationNode::ColorCallback, this, nullptr, sub_opt_1);
+    color_sub_ = it_->subscribe(color_topic_, 2, &CalibrationNode::ColorCallback, this, nullptr, sub_opt_1);
     pose_sub_ = this->create_subscription<geometry_msgs::msg::Pose>(
         "/head_pose", 10,
         std::bind(&CalibrationNode::PoseCallback, this, std::placeholders::_1), sub_opt_2);
     is_offline_ = is_offline;
     if (!is_offline_) {
         camera_info_sub_ = this->create_subscription<sensor_msgs::msg::CameraInfo>(
-            intrin_topic, 10,
+            intrin_topic_, 10,
             std::bind(&CalibrationNode::CameraInfoCallback, this, std::placeholders::_1));
     }
 
@@ -149,6 +179,8 @@ void CalibrationNode::Init(const std::string cfg_path, bool is_offline, std::str
     board_detector_ = std::make_shared<BoardDetector>(cv::Size(board_w_, board_h_), board_square_size_, intr_);
 
     data_syncer_ = std::make_shared<DataSyncer>(false);
+    data_logger_ = std::make_shared<DataLogger>(".", false);
+    is_offline_ = is_offline;
     if (is_offline_) {
         std::string data_dir = cfg_path.substr(0, cfg_path.find_last_of("/"));
         data_syncer_->LoadData(data_dir);
@@ -158,14 +190,17 @@ void CalibrationNode::Init(const std::string cfg_path, bool is_offline, std::str
 
 void CalibrationNode::RunExtrinsicCalibrationProcess(const SyncedDataBlock &data_block) {
     if (!is_offline_ && new_log_path_) {
-        log_path_ = std::string(std::getenv("HOME")) + "/Workspace/calibration_log/handeye/" + getTimeString();
+        std::string log_root = std::string(std::getenv("HOME")) + "/Workspace/calibration_log/handeye/" + getTimeString();
+        data_logger_->ChangeLogPath(log_root);
+        data_logger_->LogYAML(cfg_node_, "vision_local.yaml");
         new_log_path_ = false;
     }
     auto img = data_block.color_data.data;
     double timestamp = data_block.color_data.timestamp;
     double color_pose_timediff = std::abs(data_block.pose_data.timestamp - timestamp) * 1000;
-    if (color_pose_timediff > 40) {
-        std::cerr << "color and pose data not synced, time diff: " << color_pose_timediff << std::endl;
+    if (color_pose_timediff > sync_time_diff_ms_) {
+        std::cerr << "color and pose data not synced, time diff(ms): "
+                  << color_pose_timediff << " > " << sync_time_diff_ms_ << std::endl;
         return;
     }
 
@@ -208,32 +243,12 @@ void CalibrationNode::RunExtrinsicCalibrationProcess(const SyncedDataBlock &data
             cali_data_.emplace_back(data_block);
 
             if (!is_offline_) {
-                if (!std::filesystem::exists(log_path_)) {
-                    std::filesystem::create_directories(log_path_);
-                    std::cout << "creating log directory: " << log_path_ << std::endl;
-                }
-                // save img
-                std::string img_name = log_path_ + "/color_" + std::to_string(timestamp) + ".jpg";
-                cv::imwrite(img_name, img);
-                // save pose
-                YAML::Node pose_node;
-                pose_node["pose"] = data_block.pose_data.data;
-                std::string yaml_name = log_path_ + "/pose_" + std::to_string(timestamp) + ".yaml";
-                std::ofstream pose_yaml(yaml_name);
-                pose_yaml << pose_node;
-                // save vision_local.yaml
-                std::string vision_cfg_name = log_path_ + "/vision_local.yaml";
-                std::ofstream vision_cfg(vision_cfg_name);
-                vision_cfg << cfg_node_;
+                data_logger_->LogDataBlock(data_block);
             }
         }
         break;
     }
     case 'c': {
-        if (cali_data_.size() < 8) {
-            std::cout << "not enough data for calibration, need at least 8 frames!" << std::endl;
-            break;
-        }
         // calibrate
         std::cout << "start calibration computation!" << std::endl;
         // prepare data for calibration
@@ -325,10 +340,10 @@ void CalibrationNode::RunExtrinsicCalibrationProcess(const SyncedDataBlock &data
         cali_node["handeye"]["calibration_time"] = date;
         cali_node["handeye"]["reprojection_error"] = reprojection_error;
 
-        std::string new_cfg_path = log_path_ + "/vision_local.yaml.calbration_res_" + date;
-        std::cout << "saving calibration result to " << new_cfg_path << std::endl;
-        std::ofstream new_cfg_yaml(new_cfg_path);
-        new_cfg_yaml << new_cfg_node;
+        std::string results_name = "vision_local.yaml.calbration_res_" + date;
+        std::cout << "saving calibration result to " << results_name << std::endl;
+
+        data_logger_->LogYAML(new_cfg_node, results_name);
 
         if (!is_offline_) {
             // wait input to overwrite config
@@ -349,8 +364,44 @@ void CalibrationNode::RunExtrinsicCalibrationProcess(const SyncedDataBlock &data
             } else {
                 std::cout << "not overwrite input config" << std::endl;
             }
+            
+            // New: ask to save to system directory
+            std::cout << "save calibration result to /opt/booster/vision.yaml? y/n" << std::endl;
+            char key_sys;
+            std::cin >> key_sys;
+            if (key_sys == 'y') {
+                try {
+                    std::filesystem::create_directories("/opt/booster");
+                } catch (const std::exception &e) {
+                    std::cerr << "failed to ensure /opt/booster exists: " << e.what() << std::endl;
+                }
+                std::ofstream sys_cfg("/opt/booster/vision.yaml");
+                if (!sys_cfg) {
+                    std::cerr << "failed to open /opt/booster/vision.yaml for writing (permission required?)" << std::endl;
+                    // fallback: write to /tmp and print next-step command
+                    std::ostringstream oss;
+                    oss << new_cfg_node;
+                    std::string tmp_path = "/tmp/vision.yaml";
+                    {
+                        std::ofstream tmp_out(tmp_path);
+                        if (tmp_out) {
+                            tmp_out << oss.str();
+                            std::cout << "[fallback] wrote to temporary file: " << tmp_path << std::endl;
+                        } else {
+                            std::cerr << "[fallback] failed to write to temporary file: " << tmp_path << std::endl;
+                        }
+                    }
+                } else {
+                    sys_cfg << new_cfg_node;
+                    std::cout << "saved to /opt/booster/vision.yaml" << std::endl;
+                }
+            }
         }
-        std::cout << "finish extrinsics calibration process!!!" << std::endl;
+        std::cout << "finish extrinsics calibration process" << std::endl;
+        std::cout << "auto exit after calibration" << std::endl;
+        rclcpp::shutdown();
+        exit(0);
+        break;
     }
     case 'r': {
         std::cout << "rest extrinsics calibration process!!!" << std::endl;
@@ -381,10 +432,234 @@ void CalibrationNode::RunExtrinsicCalibrationProcess(const SyncedDataBlock &data
     }
 }
 
+void CalibrationNode::RunExtrinsicOffsetCalibrationProcess(const SyncedDataBlock &data_block) {
+    if (!is_offline_ && new_log_path_) {
+        std::string log_root = std::string(std::getenv("HOME")) + "/Workspace/calibration_log/offset/" + getTimeString();
+        data_logger_->ChangeLogPath(log_root);
+        data_logger_->LogYAML(cfg_node_, "vision_local.yaml");
+        new_log_path_ = false;
+    }
+    auto img = data_block.color_data.data;
+    auto p_head2base = data_block.pose_data.data;
+    auto p_eye2base = p_head2base * p_eye2head_;
+    double timestamp = data_block.color_data.timestamp;
+    double color_pose_timediff = std::abs(data_block.pose_data.timestamp - timestamp) * 1000;
+    if (color_pose_timediff > sync_time_diff_ms_) {
+        std::cerr << "color and pose data not synced, time diff(ms): "
+                  << color_pose_timediff << " > " << sync_time_diff_ms_ << std::endl;
+        return;
+    }
+
+    auto detections = detector_->Inference(img);
+    std::vector<MarkerCoordinates> marker_coords;
+    for (auto &detection : detections) {
+        detection.class_name = detector_->kClassLabels[detection.class_id];
+
+        if (detection.class_name.find("Cross") != std::string::npos || detection.class_name == "PenaltyPoint") {
+            Pose obj_pose = pose_estimator_->EstimateByColor(p_eye2base, detection, img);
+            auto xyz = obj_pose.getTranslationVec();
+            cv::Point3f position(xyz[0], xyz[1], xyz[2]);
+
+            cv::Point2f uv(detection.bbox.x + detection.bbox.width / 2, detection.bbox.y + detection.bbox.height / 2);
+            cv::Point3f ray = intr_.BackProject(uv);
+
+            marker_coords.emplace_back(position, ray, std::vector<MarkerCoordinates>(), detection.class_name);
+        }
+    }
+
+    auto display_img = YoloV8Detector::DrawDetection(img, detections);
+    std::string progress_status_text = std::to_string(cali_data_.size()) + " frames collected";
+    cv::putText(display_img, progress_status_text, cv::Point(10, 30), cv::FONT_HERSHEY_SIMPLEX, 0.7, cv::Scalar(0, 0, 255), 2);
+    cv::imshow("detection", display_img);
+
+    int wait_time = is_offline_ ? 0 : 10;
+    const char key = cv::waitKey(wait_time);
+    switch (key) {
+    case 's': {
+        std::cout << "select current snap short for calibration!" << std::endl;
+        if (!marker_coords.empty()) {
+            cali_data_.push_back(data_block);
+            // add marker_corrds to marker_coords_vector
+            marker_coords_vec_.push_back(marker_coords);
+            if (!is_offline_) {
+                data_logger_->LogDataBlock(data_block);
+            }
+        }
+        break;
+    }
+    case 'c': {
+        // calibrate
+        std::cout << "start extrinsics offset calibration process" << std::endl;
+
+        // prepare data for calibration
+        std::vector<Pose> p_head2bases;
+        std::vector<cv::Point3f> computed_rays;
+        std::vector<cv::Point3f> old_points;
+        std::vector<cv::Point3f> gt_3ds;
+
+        std::vector<cv::Point3f> selected_computed_rays;
+        std::vector<cv::Point3f> selected_gt_3ds;
+        std::vector<Pose> selected_p_head2bases;
+        std::vector<bool> selected_flags;
+
+        for (size_t i = 0; i < marker_coords_vec_.size(); i++) {
+            marker_coords = marker_coords_vec_[i];
+            std::vector<std::pair<int, int>> matching;
+            HungarianMatching(&matching, marker_coords, gt_marker_coords_);
+
+            for (auto &pair : matching) {
+                std::cout << marker_coords[pair.first].name << " -> " << gt_marker_coords_[pair.second].name << " "
+                          << marker_coords[pair.first].position << " -> " << gt_marker_coords_[pair.second].position << std::endl;
+                auto &computed_marker = marker_coords[pair.first];
+                auto &gt_marker = gt_marker_coords_[pair.second];
+
+                auto ray = computed_marker.ray;
+                auto old_point = computed_marker.position;
+                auto gt_3d = gt_marker.position;
+                auto pose = cali_data_[i].pose_data.data;
+
+                computed_rays.push_back(ray);
+                old_points.push_back(old_point);
+                gt_3ds.push_back(gt_3d);
+                p_head2bases.push_back(pose);
+
+                if (cv::norm(gt_3d - old_point) <= exclude_distance_) {
+                    selected_computed_rays.push_back(ray);
+                    selected_gt_3ds.push_back(gt_3d);
+                    selected_p_head2bases.push_back(pose);
+                    selected_flags.push_back(true);
+                } else {
+                    std::cerr << "distance bigger than threhsold, jumpy point pair: " << old_point << ", " << gt_3d << std::endl;
+                    selected_flags.push_back(false);
+                }
+            }
+        }
+
+        double euclidian_error = std::numeric_limits<double>::max();
+        Pose p_head2head_prime;
+
+        std::cout << selected_gt_3ds.size() << " of " << gt_3ds.size() << " points selected for extrinsic offset calibration" << std::endl;
+        EyeInHandOffsetCalibration(&euclidian_error,
+                                   &p_head2head_prime,
+                                   p_eye2head_,
+                                   selected_p_head2bases,
+                                   selected_computed_rays,
+                                   selected_gt_3ds,
+                                   zero_translation_);
+
+        std::cout << "p_head2head_prime: \n"
+                  << p_head2head_prime << std::endl;
+
+        double euclidian_error_all_before = Compute3dError(computed_rays, gt_3ds, p_head2bases, p_eye2head_, Pose());
+        double euclidian_error_all_after = Compute3dError(computed_rays, gt_3ds, p_head2bases, p_eye2head_, p_head2head_prime);
+        std::cout << "all points error before optimization: " << euclidian_error_all_before << std::endl
+                  << "all points error after optimization: " << euclidian_error_all_after << std::endl;
+
+        // save res
+        Pose p_eye2head_best = p_head2head_prime * p_eye2head_;
+        std::cout << "old extrin: \n"
+                  << p_eye2head_ << std::endl
+                  << "new extrin: \n"
+                  << p_eye2head_best << std::endl;
+
+        std::string date = getTimeString();
+        YAML::Node new_cfg_node = cfg_node_;
+        new_cfg_node["camera"]["extrin"] = p_eye2head_best;
+        // clear compensation
+        new_cfg_node["camera"]["pitch_compensation"] = 0.0;
+        new_cfg_node["camera"]["yaw_compensation"] = 0.0;
+        new_cfg_node["camera"]["z_compensation"] = 0.0;
+
+        YAML::Node cali_node = new_cfg_node["calibration"];
+        if (!cali_node) {
+            cali_node = YAML::Node();
+        }
+        if (!cali_node["offset"]) {
+            cali_node["offset"] = YAML::Node();
+        }
+        cali_node["offset"]["calibration_time"] = date;
+        cali_node["offset"]["3d_error"] = euclidian_error_all_after;
+
+        std::string results_name = "vision_local.yaml.offset_calbration_res_" + date;
+        std::cout << "saving calibration result to " << results_name << std::endl;
+
+        data_logger_->LogYAML(new_cfg_node, results_name);
+
+        // New: ask to save to system directory (offset mode)
+        if (!is_offline_) {
+            std::cout << "save calibration result to /opt/booster/vision.yaml? y/n" << std::endl;
+            char key_sys;
+            std::cin >> key_sys;
+            if (key_sys == 'y') {
+                try {
+                    std::filesystem::create_directories("/opt/booster");
+                } catch (const std::exception &e) {
+                    std::cerr << "failed to ensure /opt/booster exists: " << e.what() << std::endl;
+                }
+                std::ofstream sys_cfg("/opt/booster/vision.yaml");
+                if (!sys_cfg) {
+                    std::cerr << "failed to open /opt/booster/vision.yaml for writing (permission required?)" << std::endl;
+                    // fallback: write to /tmp and print next-step command
+                    std::ostringstream oss;
+                    oss << new_cfg_node;
+                    std::string tmp_path = "/tmp/vision.yaml";
+                    {
+                        std::ofstream tmp_out(tmp_path);
+                        if (tmp_out) {
+                            tmp_out << oss.str();
+                            std::cout << "[fallback] wrote to temporary file: " << tmp_path << std::endl;
+                        } else {
+                            std::cerr << "[fallback] failed to write to temporary file: " << tmp_path << std::endl;
+                        }
+                    }
+                } else {
+                    sys_cfg << new_cfg_node;
+                    std::cout << "saved to /opt/booster/vision.yaml" << std::endl;
+                }
+            }
+        }
+
+        std::cout << "finish extrinsics offset calibration process" << std::endl;
+        std::cout << "auto exit after calibration" << std::endl;
+        rclcpp::shutdown();
+        exit(0);
+        break;
+    }
+    case 'r': {
+        std::cout << "rest extrinsics offset calibration process" << std::endl;
+        new_log_path_ = true;
+        cali_data_.clear();
+        marker_coords_vec_.clear();
+        break;
+    }
+    case 'q': {
+        // exit
+        std::cout << "exit extrinsics offset calibration process" << std::endl;
+        rclcpp::shutdown();
+        exit(0);
+        break;
+    }
+    case 'h': {
+        std::cout << std::endl
+                  << "operation key binding:" << std::endl
+                  << "s: save data for calibration" << std::endl
+                  << "c: start calibration if data number exceeds 8" << std::endl
+                  << "r: restart calibration process" << std::endl
+                  << "q: exit" << std::endl;
+        break;
+    }
+    default: {
+        break;
+    }
+    }
+}
+
 void CalibrationNode::RunOfflineCalibrationProcess() {
     while (true) {
         if (calibration_mode_ == "handeye") {
             RunExtrinsicCalibrationProcess(data_syncer_->getSyncedDataBlock());
+        } else {
+            RunExtrinsicOffsetCalibrationProcess(data_syncer_->getSyncedDataBlock());
         }
     }
 }
@@ -408,6 +683,8 @@ void CalibrationNode::ColorCallback(const sensor_msgs::msg::Image::ConstSharedPt
     auto data_block = data_syncer_->getSyncedDataBlock(ColorDataBlock(img, timestamp));
     if (calibration_mode_ == "handeye") {
         RunExtrinsicCalibrationProcess(data_block);
+    } else {
+        RunExtrinsicOffsetCalibrationProcess(data_block);
     }
 }
 
@@ -438,8 +715,40 @@ void CalibrationNode::CameraInfoCallback(const sensor_msgs::msg::CameraInfo::Sha
     float cy = msg->k[5];
 
     std::vector<float> distortion_coeffs(msg->d.begin(), msg->d.end());
+
     std::cout << "update camera intrinsics" << std::endl;
-    intr_ = Intrinsics(fx, fy, cx, cy, distortion_coeffs, Intrinsics::DistortionModel::kBrownConrady);
+
+    Intrinsics::DistortionModel distortion_model;
+
+    if (msg->d.empty())
+    {
+        distortion_model = Intrinsics::DistortionModel::kNone;
+    } else {
+        // Heuristic: if distortion coefficients are all zero, treat as no distortion
+        float distortion_sum = 0.0;
+        for (size_t i = 0; i < msg->d.size(); ++i) {
+            distortion_sum += std::abs(msg->d[i]);
+        }
+        if (distortion_sum < 1e-6) {
+            distortion_model = Intrinsics::DistortionModel::kNone;
+        } else {
+            if (msg->distortion_model == "plumb_bob") {
+                distortion_model = Intrinsics::DistortionModel::kInverseBrownConrady;
+            } else  {
+                distortion_model = Intrinsics::DistortionModel::kBrownConrady;
+            }
+        }
+    }
+
+    float sum = 0.0;
+    for (auto coeff : distortion_coeffs) {
+        sum += coeff;
+    }
+    if (sum < std::numeric_limits<float>::epsilon()) {
+        intr_ = Intrinsics(fx, fy, cx, cy);
+    } else {
+        intr_ = Intrinsics(fx, fy, cx, cy, distortion_coeffs, distortion_model);
+    }
     cfg_node_["camera"]["intrin"] = intr_;
 
     // if recevied count execeeds 10, disable this callback
@@ -448,18 +757,38 @@ void CalibrationNode::CameraInfoCallback(const sensor_msgs::msg::CameraInfo::Sha
     if (recevied_count > 10) {
         camera_info_sub_.reset();
         std::cout << "disable camera info callback" << std::endl;
-        // update board_detector
         std::cout << "updated camera intrinsics: \n" << intr_ << std::endl;
+        // update pose estimator and board_detector
+        pose_estimator_ = std::make_shared<PoseEstimator>(intr_);
         board_detector_ = std::make_shared<BoardDetector>(cv::Size(board_w_, board_h_), board_square_size_, intr_);
     }
 }
 
+cv::Point3f CalculatePositionByIntersection(const Pose &p_eye2base, const cv::Point2f target_uv, const Intrinsics &intr) {
+    cv::Point3f normalized_point3d = intr.BackProject(target_uv);
+
+    cv::Mat mat_obj_ray = (cv::Mat_<float>(3, 1) << normalized_point3d.x, normalized_point3d.y, normalized_point3d.z);
+    cv::Mat mat_rot = p_eye2base.getRotationMatrix();
+    cv::Mat mat_trans = p_eye2base.toCVMat().col(3).rowRange(0, 3);
+
+    cv::Mat mat_rot_obj_ray = mat_rot * mat_obj_ray;
+
+    float scale = -mat_trans.at<float>(2, 0) / mat_rot_obj_ray.at<float>(2, 0);
+
+    cv::Mat mat_position = mat_trans + scale * mat_rot_obj_ray;
+    return cv::Point3f(mat_position.at<float>(0, 0), mat_position.at<float>(1, 0), mat_position.at<float>(2, 0));
+}
 } // namespace booster_vision
 
 const std::string kArguments = "{help h usage ? |         | print this message}"
                                "{@mode          | handeye | calibration mode: handeye or offset}"
                                "{@config_file   | <none>  | config file path}"
-                               "{offline of     |         | offline mode}";
+                               "{offline of     |         | offline mode}"
+                               "{field_yaml     |         | field yaml file}"
+                               "{matching_yaml     |         | point matching yaml file}"
+                               "{exclude_distance ed | 2     | exclude distance}"
+                               "{without_translation wot| true | without translation}"
+                               "{point_yaml     |         | point yaml file}";
 
 int main(int argc, char **argv) {
     cv::CommandLineParser parser(argc, argv, kArguments);
@@ -470,6 +799,9 @@ int main(int argc, char **argv) {
     std::string config_path = parser.get<std::string>("@config_file");
     std::string mode = parser.get<std::string>("@mode");
     bool offline_mode = parser.has("offline");
+    float exclude_distance = parser.get<float>("exclude_distance");
+    std::cout << "exclude distance: " << exclude_distance << std::endl;
+    bool without_translation = parser.get<bool>("without_translation");
 
     if (!parser.check()) {
         parser.printErrors();

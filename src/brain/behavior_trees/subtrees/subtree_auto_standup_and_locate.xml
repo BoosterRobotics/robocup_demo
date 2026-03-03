@@ -2,11 +2,6 @@
    <BehaviorTree ID="AutoGetUpAndLocate">
       <Sequence name="root">
          <CheckAndStandUp />
-         <ReactiveSequence _while="should_recalibrate_after_fall_recovery">
-            <PrintMsg msg="执行重新定位"/>
-            <SelfLocate mode="fall_recovery" />
-            <RotateForRelocate vyaw_limit="1.0" max_msec_locate="10000" />
-         </ReactiveSequence>
       </Sequence>
    </BehaviorTree>
 </root>

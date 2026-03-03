@@ -1,28 +1,38 @@
 <root BTCPP_format="4" >
    <include path="./subtree_cam_find_and_track_ball.xml" />
+   <include path="./subtree_find_ball.xml" />
+   <include path="./subtree_locate.xml" />
    <BehaviorTree ID="GoalKeeperPlay">
       <ReactiveSequence >
-         <ReactiveSequence _while="!gamecontroller_isKickOffExecuted" name="wait">
+         <SelfLocate mode="trust_direction" />
+         <SubTree ID="Locate" _autoremap="true" _while="decision!='find'" />
+         <ReactiveSequence _while="wait_for_opponent_kickoff" name="wait for opponent kickoff">
             <SubTree ID="CamFindAndTrackBall" _autoremap="true" />
             <SetVelocity />
          </ReactiveSequence>
-         <ReactiveSequence _while="gamecontroller_isKickOffExecuted" name="start">
-            <SubTree ID="CamFindAndTrackBall" _autoremap="true" />
-            <Sequence>
-                  <GoalieDecide decision_out="{decision}" decision_in="{decision}" chase_threshold="1.2" />
-                  <Sequence _while="decision == 'find'">
-                     <RobotFindBall _while="ball_range <= 3.0" vyaw_limit="1.0" />
-                     <MoveToPoseOnField _while="ball_range > 3.0" long_range_threshold="100.0" x="-6.0" />
-                  </Sequence>
-                  <MoveToPoseOnField _while="decision == 'retreat'" long_range_threshold="100.0" x="-6.0" />
-                  <Chase   _while="decision == 'chase'"  vx_limit="1.0"  vy_limit="0.4"  vtheta_limit="1.0"  dist="1.0"/>
-                  <Adjust  _while="decision == 'adjust'"   position="defense" turn_threshold="0.4" max_range="0.6" min_range="0.4" vx_limit="0.2" vy_limit="0.2" vtheta_limit="1.0"  />
-                  <Sequence  _while="decision == 'kick'">
-                     <SetVelocity />
-                     <Sleep msec="1000" />
-                     <Kick vx_limit="1.2" vy_limit="0.4" min_msec_kick="1000"/>
-                  </Sequence>
+         <ReactiveSequence _while="!wait_for_opponent_kickoff" name="our kickoff or opponent already kicked off">
+            <Sequence _while="ball_out">
+               <SubTree ID="CamFindAndTrackBall" _autoremap="true" />
+               <GoBackInField />
+               <SubTree ID="Locate" _autoremap="true" _while="decision!='find'" />
             </Sequence>
+            <ReactiveSequence _while="!ball_out">
+               <ReactiveSequence _while="wait_for_opponent_kickoff" name="wait for opponent kickoff">
+                  <SubTree ID="CamFindAndTrackBall" _autoremap="true" />
+                  <SetVelocity />
+               </ReactiveSequence>
+               <Sequence _while="!wait_for_opponent_kickoff" name="normal play">
+                  <Sequence>
+                     <SubTree ID="CamFindAndTrackBall" _autoremap="true" />
+                     <GoalieDecide decision_out="{decision}" decision_in="{decision}" chase_threshold="3.0"/>
+                     <GoToGoalBlockingPosition _while="decision=='find'" theta_tolerance="0.6" />
+                     <GoToGoalBlockingPosition _while="decision == 'retreat'" theta_tolerance="0.6" />
+                     <Chase   _while="decision == 'chase'"  vx_limit="0.8"  vy_limit="0.3"  vtheta_limit="1.0"  dist="0.1" safe_dist="0.5" />
+                     <Adjust _while="decision =='adjust'" turn_threshold="0.8" range="0.2" vx_limit="0.8" vy_limit="0.6" vtheta_limit="1.0" vtheta_factor="4.5" tangential_speed_far="0.9" tangential_speed_near="0.3" />
+                     <Kick _while="decision == 'kick'" speed_limit="1.2" min_msec_kick="600"/>
+                  </Sequence>
+               </Sequence>
+            </ReactiveSequence>
          </ReactiveSequence>
       </ReactiveSequence>
    </BehaviorTree>

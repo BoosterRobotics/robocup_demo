@@ -42,8 +42,28 @@ Intrinsics::Intrinsics(float fx_value, float fy_value, float cx_value, float cy_
 
 cv::Point2f Intrinsics::Project(const cv::Point3f &point) const {
     cv::Point2f uv;
-    uv.x = fx * point.x / point.z + cx;
-    uv.y = fy * point.y / point.z + cy;
+    switch (model) {
+    case DistortionModel::kNone:
+    case DistortionModel::kInverseBrownConrady: {
+        uv.x = fx * point.x / point.z + cx;
+        uv.y = fy * point.y / point.z + cy;
+        break;
+    }
+    case DistortionModel::kBrownConrady: {
+        float x = point.x / point.z;
+        float y = point.y / point.z;
+        float r2 = x * x + y * y;
+        float r4 = r2 * r2;
+        float r6 = r4 * r2;
+        const float* d = distortion_coeffs.data();
+
+        float x_prime = x * (1 + d[0] * r2 + d[1] * r4 + d[4] * r6) + 2 * d[2] * x * y + d[3] * (r2 + 2 * x * x);
+        float y_prime = y * (1 + d[0] * r2 + d[1] * r4 + d[4] * r6) + d[2] * (r2 + 2 * y * y) + 2 * d[3] * x * y;
+
+        uv.x = fx * x_prime + cx;
+        uv.y = fy * y_prime + cy;
+    }
+    }
     return uv;
 }
 
@@ -54,12 +74,14 @@ cv::Point3f Intrinsics::BackProject(const cv::Point2f &point, float depth) const
         xyz.x = (point.x - cx) * depth / fx;
         xyz.y = (point.y - cy) * depth / fy;
         xyz.z = depth;
+        break;
     }
     case DistortionModel::kBrownConrady: {
         std::vector<cv::Point2f> distorted_points = {point};
         std::vector<cv::Point2f> undistort_points;
         cv::undistortPoints(distorted_points, undistort_points, get_intrinsics_matrix(), distortion_coeffs);
         xyz = cv::Point3f(undistort_points[0].x, undistort_points[0].y, 1) * depth;
+        break;
     }
     case DistortionModel::kInverseBrownConrady: {
         float x = (point.x - cx) / fx;
@@ -81,6 +103,7 @@ cv::Point3f Intrinsics::BackProject(const cv::Point2f &point, float depth) const
             y = (yo - delta_y) * icdist;
         }
         xyz = cv::Point3f(x, y, 1) * depth;
+        break;
     }
     }
     return xyz;

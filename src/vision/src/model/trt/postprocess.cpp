@@ -4,8 +4,8 @@
 
 #include <algorithm>
 #include <iostream>  // Include this header for printing
-#include "booster_vision/model//trt/postprocess.h"
-#include "booster_vision/model//trt/utils.h"
+#include "booster_vision/model/trt/postprocess.h"
+#include "booster_vision/model/trt/utils.h"
 
 cv::Rect get_rect(cv::Mat& img, float bbox[4]) {
     float l, r, t, b;

@@ -2,6 +2,7 @@
 
 #include <opencv2/opencv.hpp>
 #include <sensor_msgs/msg/image.hpp>
+#include <sensor_msgs/msg/compressed_image.hpp>
 
 namespace booster_vision {
 

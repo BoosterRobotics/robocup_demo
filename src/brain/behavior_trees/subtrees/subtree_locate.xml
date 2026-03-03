@@ -1,0 +1,15 @@
+<!-- locate behavior tree -->
+
+<root BTCPP_format="4" >
+  <BehaviorTree ID="Locate">
+     <Sequence name="root">
+        <SelfLocate mode="trust_direction" />
+        <SelfLocate1M msecs_interval="300" max_dist="3.0" max_drift="2.0" />
+        <SelfLocate2T msecs_interval="300" max_dist="3.0" max_drift="2.0" />
+        <SelfLocatePT msecs_interval="300" max_dist="3.0" max_drift="2.0" />
+        <SelfLocateLT msecs_interval="300" max_dist="3.0" max_drift="2.0" />
+        <SelfLocate2X msecs_interval="300" max_dist="3.0" max_drift="2.0" />
+        <SelfLocateBorder msecs_interval="300" max_dist="3.0" max_drift="2.0"/>
+     </Sequence>
+  </BehaviorTree>
+</root>

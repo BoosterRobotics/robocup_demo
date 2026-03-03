@@ -1,9 +1,28 @@
 #include "brain_data.h"
 #include "utils/math.h"
 
-vector<FieldMarker> BrainData::getMarkers()
+BrainData::BrainData()
+{
+    std::fill(std::begin(penalty), std::end(penalty), SUBSTITUTE);
+}
+
+vector<GameObject> BrainData::getMarkingsByType(set<string> types) {
+    if (types.size() == 0) return getMarkings();
+
+    // else
+    vector<GameObject> res = {};
+    auto markings = getMarkings();
+    for (int i = 0; i < markings.size(); i++) {
+        if (types.count(markings[i].label) > 0) res.push_back(markings[i]);
+    }
+    
+    return res;
+}
+
+vector<FieldMarker> BrainData::getMarkersForLocator()
 {
     vector<FieldMarker> res;
+    auto markings = getMarkings();
     for (size_t i = 0; i < markings.size(); i++)
     {
         auto label = markings[i].label;
@@ -11,7 +30,7 @@ vector<FieldMarker> BrainData::getMarkers()
         auto y = markings[i].posToRobot.y;
         auto confidence = markings[i].confidence;
 
-        char markerType = ' ';
+        char markerType;
         if (label == "LCross")
             markerType = 'L';
         else if (label == "TCross")

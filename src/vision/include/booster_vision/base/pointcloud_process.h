@@ -10,9 +10,15 @@
 
 namespace booster_vision {
 
-void CreatePointCloud(pcl::PointCloud<pcl::PointXYZRGB>::Ptr &cloud, const cv::Mat &depth_image, const cv::Mat &rgb_image, const cv::Rect &bbox,
-                      const booster_vision::Intrinsics &intrinsics);
+void VisualizePointCloud(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr &cloud);
 
+void VisualizePointCloudandPlane(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr &cloud, const std::vector<float> &coeffs, float x, float y, float z);
+
+void VisualizePointCloudSphere(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr &cloud, const std::vector<std::vector<float>> &sphere_coeffs);
+
+void CreatePointCloud(pcl::PointCloud<pcl::PointXYZRGB>::Ptr &cloud, const cv::Mat &depth_image, const cv::Mat &rgb_image, const cv::Rect &bbox,
+
+                      const booster_vision::Intrinsics &intrinsics);
 void CreatePointCloud(pcl::PointCloud<pcl::PointXYZRGB>::Ptr &cloud, const cv::Mat &depth_image, const cv::Mat &rgb_image,
                       const booster_vision::Intrinsics &intrinsics);
 

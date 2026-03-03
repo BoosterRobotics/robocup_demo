@@ -1,46 +1,42 @@
 #pragma once
 
 #include <string>
-#include <rerun.hpp>
+#include <sstream>
+#include <map>
+#include <rclcpp/rclcpp.hpp>
+#include <diagnostic_msgs/msg/key_value.hpp>
+#include "types.h"
 
-class Brain; // Forward declaration
+
+class Brain; // forward declaration
 
 using namespace std;
 
 /**
- * Operations related to rerun logs are handled in this library.
- * If there are repetitive logs that need to be printed, the functions can be encapsulated within this class.
+ * If some logging patterns are repetitive, wrap them in this class.
  */
 class BrainLog
 {
 public:
+    /**
+     * Constructor initializes the object and sets enabled to false.
+     */
     BrainLog(Brain *argBrain);
-    
-    void prepare();
 
-    void logStatics();
+    // make use of RCLCPP logging macros, and prepend entity_path to the message for easier filtering
+    void debug(string_view entity_path, const string& message = "") const;
+    void log(string_view entity_path, const string& message = "") const;
+    void warn(string_view entity_path, const string& message = "") const;
+    void error(string_view entity_path, const string& message = "") const;
 
-    void setTimeNow();
-
-    void setTimeSeconds(double seconds);
-
-    // Expose the same interface as rerun::RecordingStream
-    template <typename... Ts>
-    inline void log(string_view entity_path, const Ts &...archetypes_or_collections) const
-    {
-        if (enabled)
-            rerunLog.log(entity_path, archetypes_or_collections...);
-    }
-
-    void logToScreen(string logPath, string text, u_int32_t color, double padding = 0.0);
-
-    inline bool isEnabled()
-    {
-        return enabled;
-    }
+    void log_scalar(const string& entity_path, const string& label, double value);
+    void log_scalar(const string& entity_path, const string& label, int value);
 
 private:
-    bool enabled;
     Brain *brain;
-    rerun::RecordingStream rerunLog;
+    // create independent publisher for each entity_path
+    map<string, rclcpp::Publisher<diagnostic_msgs::msg::KeyValue>::SharedPtr> scalar_publishers_;
+    
+    // get or create publisher
+    rclcpp::Publisher<diagnostic_msgs::msg::KeyValue>::SharedPtr get_or_create_publisher(const string& entity_path);
 };

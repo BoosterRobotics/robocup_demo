@@ -1,7 +1,12 @@
 .vscode
+.cache
 *.log
 build
 log
 install
 brain_local.yaml
 vision_local.yaml
+build_image
+build_ros2
+dist
+.DS_Store

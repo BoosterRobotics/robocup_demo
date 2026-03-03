@@ -2,76 +2,129 @@
 
 #include <iostream>
 #include <string>
-#include <rerun.hpp>
 
-#include <booster_msgs/msg/rpc_req_msg.hpp>
+#include "booster_interface/srv/rpc_service.hpp"
+#include "booster_interface/msg/booster_api_req_msg.hpp"
+#include "booster_msgs/msg/rpc_req_msg.hpp"
 
 using namespace std;
 
-class Brain; // Forward declaration
+class Brain; // Mutually dependent classes; forward declaration
+
 
 /**
- * The RobotClient class. All operations for controlling the robot by calling the RobotSDK are placed here.
+ * `RobotClient` contains calls to RobotSDK to operate the robot.
+ * The implementation currently depends on some `Brain` internals, so they are mutually dependent.
  */
 class RobotClient
 {
 public:
-    RobotClient(Brain *argBrain) : brain(argBrain) {}
+    RobotClient(Brain* argBrain) : brain(argBrain) {}
 
-    void init();
+    void init(string robot_name);
 
     /**
-     * @brief Move the robot's head.
+     * @brief 
      *
      * @param pitch
      * @param yaw
      *
-     * @return int, 0 indicates successful execution.
+    * @return int , 0 indicates success
      */
     int moveHead(double pitch, double yaw);
 
     /**
-     * @brief Set the moving speed of the robot.
-     *
-     * @param x double, forward (m/s).
-     * @param y double, leftward (m/s).
-     * @param theta double, counterclockwise rotation angle (rad/s).
-     * @param applyMinX, applyMinY, applyMinTheta bool Whether to adjust the command size to prevent non-response when the speed command is too small.
-     *
-     * @return int, 0 indicates successful execution.
-     *
-     */
-    int setVelocity(double x, double y, double theta, bool applyMinX = true, bool applyMinY = true, bool applyMinTheta = true);
+     * @brief 
+     * 
+     * @param x double, 
+     * @param y double, 
+     * @param theta double, 
+     * @param applyMinX, applyMinY, applyMinTheta bool 
+     * 
+    * @return int , 0 indicates success
+     * 
+    */
+    int setVelocity(double x, double y, double theta);
+
+    int crabWalk(double angle, double speed);
 
     /**
-     * @brief Walk towards a certain Pose in the pitch coordinate system in speed mode. Note that the final orientation should also be reached.
-     *
-     * @param tx, ty, ttheta double, the target Pose, in the Field coordinate system.
-     * @param longRangeThreshold double, when the distance exceeds this value, it is preferred to turn towards the target point and walk over instead of directly adjusting the position.
-     * @param turnThreshold double, when the angle difference between the direction of the target point (note that it is not the final orientation ttheta) and the current angle is greater than this value, first turn to face the target.
-     * @param vxLimit, vyLimit, vthetaLimit double, the upper limits of speeds in each direction, m/s, rad/s.
-     * @param xTolerance, yTolerance, thetaTolerance double, the tolerances for judging that the target point has been reached.
-     *
-     * @return int The return value of the motion control command, 0 represents success.
+     * @brief 
+     * 
+     * @param tx, ty, ttheta double, 
+     * @param longRangeThreshold double, 
+     * @param turnThreshold double, 
+     * @param vxLimit, vyLimit, vthetaLimit double, 
+     * @param xTolerance, yTolerance, thetaTolerance double,
+     * @param avoidObstacle bool, 
+     * 
+    * @return int Return value of motion-control command; 0 indicates success
      */
-    int moveToPoseOnField(double tx, double ty, double ttheta, double longRangeThreshold, double turnThreshold, double vxLimit, double vyLimit, double vthetaLimit, double xTolerance, double yTolerance, double thetaTolerance);
+    int moveToPoseOnField(double tx, double ty, double ttheta, double longRangeThreshold, double turnThreshold, double vxLimit, double vyLimit, double vthetaLimit, double xTolerance, double yTolerance, double thetaTolerance, bool avoidObstacle = false);
 
     /**
-     * @brief Wave the hand.
+     * @brief   
+     * 
+     * @param tx, ty, ttheta double, 
+     * @param longRangeThreshold double, 
+     * @param turnThreshold double, 
+     * @param vxLimit, vyLimit, vthetaLimit double, 
+     * @param xTolerance, yTolerance, thetaTolerance double,
+     * @param avoidObstacle bool, 
+     * 
+    * @return int Return value of motion-control command; 0 indicates success
+     */
+
+    int moveToPoseOnField2(double tx, double ty, double ttheta, double longRangeThreshold, double turnThreshold, double vxLimit, double vyLimit, double vthetaLimit, double xTolerance, double yTolerance, double thetaTolerance, bool avoidObstacle = false);
+    /**
+     * @brief 
+     * 
+     * @param tx, ty, ttheta double, 
+     * @param longRangeThreshold double, 
+     * @param turnThreshold double, 
+     * @param vxLimit, vyLimit, vthetaLimit double, 
+     * @param xTolerance, yTolerance, thetaTolerance double, 
+     * @param avoidObstacle bool, 
+     * 
+    * @return int Return value of motion-control command; 0 indicates success
+     */
+    int moveToPoseOnField3(double tx, double ty, double ttheta, double longRangeThreshold, double turnThreshold, double vxLimit, double vyLimit, double vthetaLimit, double xTolerance, double yTolerance, double thetaTolerance, bool avoidObstacle = false);
+
+    /**
+     * @brief Wave hand
      */
     int waveHand(bool doWaveHand);
 
     /**
-     * @brief 起身
+     * @brief Stand up
      */
     int standUp();
 
     /**
-     * @brief 进阻尼
+     * @brief switch to RL-based vision kick mode
+     * @param start true indicates entering VisualKick mode, false indicates exiting VisualKick mode
+     */
+     int RLVisionKick(bool start = true);
+
+     /**
+      * @brief switch to robocup gait
+      */
+     int robocupWalk();
+
+    /**
+     * @brief Enter damping mode
      */
     int enterDamping();
 
+    double msecsToCollide(double vx, double vy, double vtheta, double maxTime=10000);
+
+    bool isStandingStill(double timeBuffer = 1000);
+
 private:
+    int call(booster_interface::msg::BoosterApiReqMsg msg);
     rclcpp::Publisher<booster_msgs::msg::RpcReqMsg>::SharedPtr publisher;
     Brain *brain;
+    double _vx, _vy, _vtheta;
+    rclcpp::Time _lastCmdTime;
+    rclcpp::Time _lastNonZeroCmdTime;
 };

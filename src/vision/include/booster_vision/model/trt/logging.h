@@ -25,7 +25,7 @@
 #include <ostream>
 #include <sstream>
 #include <string>
-#include "booster_vision/model/trt/macros.h"
+#include "booster_vision/model//trt/macros.h"
 
 using Severity = nvinfer1::ILogger::Severity;
 

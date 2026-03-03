@@ -3,7 +3,7 @@
     <name>vision</name>
     <version>1.0.0</version>
     <description>Accerated Revised Yolo v8 tiny model by using Nvidia TensorRT</description>
-    <maintainer email="guwen@boosterobotics.com">Gu Wen</maintainer>
+    <maintainer email="guwen@booster.tech">Gu Wen</maintainer>
     <license>BSD</license>
     <buildtool_depend>ament_cmake</buildtool_depend>
     <depend>boost</depend>

@@ -8,7 +8,11 @@ int main(int argc, char **argv) {
     rclcpp::init(argc, argv);
 
     std::string node_name = "vision_node";
-    auto node = std::make_shared<booster_vision::VisionNode>(node_name);
+    
+    rclcpp::NodeOptions options;
+    options.use_intra_process_comms(true);
+    
+    auto node = std::make_shared<booster_vision::VisionNode>(node_name, options);
 
     std::string config_template_path = argv[1];
     std::string config_path = "";
@@ -17,7 +21,7 @@ int main(int argc, char **argv) {
     }
     node->Init(config_template_path, config_path);
 
-    rclcpp::executors::MultiThreadedExecutor executor;
+    rclcpp::executors::MultiThreadedExecutor executor(rclcpp::ExecutorOptions(), 4);
     executor.add_node(node);
     executor.spin();
 

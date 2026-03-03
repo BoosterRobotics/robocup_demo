@@ -66,6 +66,10 @@ public:
         return cv::countNonZero(mat_pose != other.mat_pose) == 0;
     }
 
+    bool operator!=(const Pose &other) const {
+        return !(*this == other);
+    }
+
     friend std::ostream &operator<<(std::ostream &os, const Pose &pose) {
         os << pose.mat_pose;
         return os;

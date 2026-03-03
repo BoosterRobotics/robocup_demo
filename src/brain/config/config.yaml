@@ -1,0 +1,93 @@
+brain_node:
+  ros__parameters:
+    game:
+      team_id: 29 # must be consistent with GameControl
+      player_id: 1 # 1 | 2 | 3 | 4 | 5
+      field_type: "adult_size" # adult_size | kid_size | robo_league
+      player_role: "striker" # striker | goal_keeper
+      treat_person_as_robot: false
+      number_of_players: 3
+      
+    robot:
+      robot_name: "" # When multiple robots exist, specify e.g. "robot0", "robot1"; leave empty for single robot
+      robot_height: 0.8 # 1.12 for T1
+      odom_factor: 0.8 # 1.2 for T1
+      vx_factor: 0.50
+      yaw_offset: 0.0
+      vx_limit: 1.0
+      vy_limit: 0.4
+      vtheta_limit: 1.2
+      min_vx: 0.3 # Minimum x velocity when command is too small, to prevent no response
+      min_vy: 0.3 # Minimum y velocity when command is too small, to prevent no response
+      min_vtheta: 0.25 # Minimum theta velocity when command is too small, to prevent no response
+
+    strategy:
+      ball_confidence_threshold: 50.0
+      ball_memory_timeout: 2.0
+      tm_ball_dist_threshold: 2.0
+      limit_near_ball_speed: false
+      near_ball_speed_limit: 0.2
+      near_ball_range: 3.0
+      abort_kick_when_ball_moved: true
+      ball_out_threshold: 2.0
+      cooperation:
+        enable_role_switch: false
+        ball_control_cost_threshold: 20.0
+
+    obstacle_avoidance:
+      depth_sample_step: 16
+      obstacle_min_height: 0.45
+      grid_size: 0.2
+      max_x: 3.0
+      max_y: 5.0
+      exclusion_x: 0.4
+      exclusion_y: 0.5
+      ball_exclusion_radius: 0.0
+      ball_exclusion_height: 0.3
+      occupancy_threshold: 2000.0
+      collision_threshold: 0.3
+      safe_distance: 2.0
+      avoid_secs: 3.0
+      enable_freekick_avoid: false
+      freekick_start_placing_safe_distance: 0.1
+      freekick_start_placing_avoid_secs: 2.5
+      obstacle_memory_msecs: 500.0
+      avoid_during_kick: false
+      kick_ao_safe_dist: 3.0
+      avoid_during_chase: true
+      chase_ao_safe_dist: 3.5
+
+    RLVisionKick:
+      enableAutoVisualKick: true
+      autoVisualKickEnableDistMin: 0.2
+      autoVisualKickEnableDistMax: 4.0
+      autoVisualKickEnableAngle: 0.8
+
+    locator:
+      min_marker_count: 5
+      max_residual: 0.35
+
+    enable_com: true
+    
+    recovery:
+      retry_max_count: 2
+
+    vision:
+        # image_camera_info_topic: "/camera/camera/color/camera_info" # realsense
+        # depth_image_topic: "/camera/camera/aligned_depth_to_color/image_raw" # realsense
+        # depth_camera_info_topic: "/camera/camera/aligned_depth_to_color/camera_info" # realsense
+
+        # image_camera_info_topic: "/zed/zed_node/left/camera_info" # zed
+        # depth_image_topic: "/zed/zed_node/depth/depth_registered" # zed
+        # depth_camera_info_topic: "/zed/zed_node/depth/camera_info" # zed
+
+        image_camera_info_topic: "/StereoNetNode/rectified_image" # d-robotics
+        depth_image_topic: "/StereoNetNode/stereonet_depth" # d-robotics
+        depth_camera_info_topic: "/StereoNetNode/stereonet_depth/camera_info" # d-robotics
+
+        
+        # image_camera_info_topic: "/camera/robot0_rgbd_camera/rgb/camera_info" # simulated
+        # depth_image_topic: "/camera/robot0_rgbd_camera/depth/image_raw" # simulated
+        # depth_camera_info_topic: "/camera/robot0_rgbd_camera/depth/camera_info" # simulated
+    
+    game_control_ip: "127.0.0.1"

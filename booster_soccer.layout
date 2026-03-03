@@ -1,0 +1,212 @@
+{
+  "configById": {
+    "Image!3rp8xxh": {
+      "imageTopic": "/camera/robot0_rgbd_camera/rgb/image_compressed",
+      "customLayers": [
+        {
+          "id": "88345f1f-eb82-43d2-aa71-d610a642f497",
+          "name": "Detection",
+          "visible": true,
+          "code": "@on_message(topic='/booster_soccer/detection',  anti_flicker=True)\ndef draw_bounding_box(msg):\n    for obj in msg.detected_objects:\n        color = \"#FFFFFFFF\"\n        if obj.label == \"XCross\":\n            color = \"#0000FFFF\"\n        elif obj.label == \"LCross\":\n            color = \"#FFFF00FF\"\n        elif obj.label == \"TCross\":\n            color = \"#00FF00FF\"\n        elif obj.label == \"Goalpost\":\n            color = \"#007777FF\"\n        elif obj.label == \"PenaltyPoint\":\n            color = \"#FF7700FF\"\n        draw2d.box(obj.xmin, obj.ymin, obj.xmax, obj.ymax) \\\n            .stroke_color(color) \\\n            .stroke_width(2) \\\n            .label(obj.label)",
+          "showLabel": true,
+          "status": "success",
+          "opacity": 100
+        }
+      ],
+      "cameraState": {
+        "distance": 20,
+        "perspective": true,
+        "phi": 60,
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "targetOffset": [
+          0,
+          0,
+          0
+        ],
+        "targetOrientation": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "thetaOffset": 45,
+        "fovy": 45,
+        "near": 0.5,
+        "far": 5000
+      },
+      "followMode": "follow-pose",
+      "scene": {},
+      "transforms": {},
+      "topics": {},
+      "layers": {},
+      "publish": {
+        "type": "point",
+        "poseTopic": "/move_base_simple/goal",
+        "pointTopic": "/clicked_point",
+        "poseEstimateTopic": "/initialpose",
+        "poseEstimateXDeviation": 0.5,
+        "poseEstimateYDeviation": 0.5,
+        "poseEstimateThetaDeviation": 0.26179939
+      },
+      "imageMode": {
+        "imageTopic": "/camera/robot0_rgbd_camera/rgb/image_compressed"
+      }
+    },
+    "Terminal!8jkcv": {},
+    "Publish!1hm7w2y": {
+      "buttonText": "Publish",
+      "buttonTooltip": "",
+      "advancedView": true,
+      "value": "{\n  \"data\": \"locate\"\n}",
+      "topicName": "/booster_agent/soccer_game_control",
+      "datatype": "std_msgs/msg/String"
+    },
+    "Canvas!44ot63c": {
+      "axis": "right",
+      "showAxis": false,
+      "showGrid": true,
+      "customLayers": [
+        {
+          "id": "c158e0f1-6909-4ccc-a34a-dac6a72ffed4",
+          "name": "Field",
+          "visible": true,
+          "opacity": 100,
+          "code": "@on_message(\"/booster_soccer/field_dimensions\")\r\ndef draw_field(msg):\r\n    data = msg.data\r\n    length = data[0]\r\n    width = data[1]\r\n    penalty_dist = data[2]\r\n    goal_width = data[3]\r\n    circle_r = data[4]\r\n    penalty_area_length = data[5]\r\n    penalty_area_width = data[6]\r\n    goal_area_length = data[7]\r\n    goal_area_width = data[8]\r\n\r\n    # Field\r\n    draw2d.box(-length / 2 - 2, -width / 2 - 2, length / 2 + 2, width / 2 + 2).stroke_width(0).fill_color(\"#009900FF\")\r\n    draw2d.line(-length / 2, -width / 2, -length / 2, width / 2).stroke_width(0.08, False)\r\n    draw2d.line(-length / 2, -width / 2, length / 2, -width / 2).stroke_width(0.08, False)    \r\n    draw2d.line(length / 2, width / 2, -length / 2, width / 2).stroke_width(0.08, False)\r\n    draw2d.line(length / 2, width / 2, length / 2, -width / 2).stroke_width(0.08, False)\r\n    draw2d.circle(0, 0, circle_r).stroke_width(0.08, False)\r\n\r\n    # penalty point\r\n    draw2d.line(-length / 2 + penalty_dist - 0.1, 0, -length / 2 + penalty_dist + 0.1, 0)\r\n    draw2d.line(-length / 2 + penalty_dist, -0.1, -length / 2 + penalty_dist, 0.1)\r\n    draw2d.line(length / 2 - penalty_dist - 0.1, 0, length / 2 - penalty_dist + 0.1, 0)\r\n    draw2d.line(length / 2 - penalty_dist, -0.1, length / 2 - penalty_dist, 0.1)\r\n\r\n    # goal area\r\n    draw2d.line(-length / 2, -goal_area_width / 2, -length / 2 + goal_area_length, -goal_area_width / 2)\r\n    draw2d.line(-length / 2, goal_area_width / 2, -length / 2 + goal_area_length, goal_area_width / 2)\r\n    draw2d.line(-length / 2 + goal_area_length, -goal_area_width / 2, -length / 2 + goal_area_length, goal_area_width / 2)\r\n    draw2d.line(length / 2, -goal_area_width / 2, length / 2 - goal_area_length, -goal_area_width / 2)\r\n    draw2d.line(length / 2, goal_area_width / 2, length / 2 - goal_area_length, goal_area_width / 2)\r\n    draw2d.line(length / 2 - goal_area_length, -goal_area_width / 2, length / 2 - goal_area_length, goal_area_width / 2)\r\n\r\n    # penalty area\r\n    draw2d.line(-length / 2, -penalty_area_width / 2, -length / 2 + penalty_area_length, -penalty_area_width / 2)\r\n    draw2d.line(-length / 2, penalty_area_width / 2, -length / 2 + penalty_area_length, penalty_area_width / 2)\r\n    draw2d.line(-length / 2 + penalty_area_length, -penalty_area_width / 2, -length / 2 + penalty_area_length, penalty_area_width / 2)\r\n    draw2d.line(length / 2, -penalty_area_width / 2, length / 2 - penalty_area_length, -penalty_area_width / 2)\r\n    draw2d.line(length / 2, penalty_area_width / 2, length / 2 - penalty_area_length, penalty_area_width / 2)\r\n    draw2d.line(length / 2 - penalty_area_length, -penalty_area_width / 2, length / 2 - penalty_area_length, penalty_area_width / 2)\r\n\r\n    # goal\r\n    draw2d.line(-length / 2, -goal_width / 2, -length / 2 - 0.5, -goal_width / 2)\r\n    draw2d.line(-length / 2, goal_width / 2, -length / 2 - 0.5, goal_width / 2)\r\n    draw2d.line(-length / 2 - 0.5, goal_width / 2, -length / 2 - 0.5, -goal_width / 2)\r\n    draw2d.line(length / 2, -goal_width / 2, length / 2 + 0.5, -goal_width / 2)\r\n    draw2d.line(length / 2, goal_width / 2, length / 2 + 0.5, goal_width / 2)\r\n    draw2d.line(length / 2 + 0.5, goal_width / 2, length / 2 + 0.5, -goal_width / 2)",
+          "showLabel": true,
+          "status": "success"
+        },
+        {
+          "id": "c8329279-8401-47c4-a6f3-84460ca8838d",
+          "name": "Robot",
+          "visible": true,
+          "opacity": 100,
+          "code": "import math\r\n@on_message(\"/booster_soccer/robot_pose\")\r\ndef draw_robot(msg):\r\n    x = msg.x\r\n    y = msg.y\r\n    theta = msg.theta\r\n    print(f'x={x}y={y}t={theta}')\r\n    draw2d.circle(x, y, 0.3).stroke_color(\"#FF0000FF\").stroke_width(4)\r\n    draw2d.line(x,y, x + math.cos(theta) * 0.6, y + math.sin(theta) * 0.6).stroke_color(\"#FF0000FF\").stroke_width(4)\r\n",
+          "showLabel": true,
+          "status": "success"
+        },
+        {
+          "id": "45126e07-8b6a-4258-81e7-53dd4fd0d0a3",
+          "name": "Ball",
+          "visible": true,
+          "opacity": 100,
+          "code": "\r\n@on_message(\"/booster_soccer/ball_position\")\r\ndef draw_ball(msg):\r\n    x = msg.x\r\n    y = msg.y\r\n    draw2d.circle(x, y, 0.1).stroke_color(\"#FFFFFFFF\").stroke_width(4)\r\n    draw2d.line(x - 0.5, y, x + 0.5, y).stroke_width(4)\r\n    draw2d.line(x, y - 0.5, x, y + 0.5).stroke_width(4)",
+          "showLabel": true,
+          "status": "success"
+        }
+      ],
+      "customWidgetName": "FieldView",
+      "isCustomWidget": true,
+      "customPanelId": "b275f0d3-949a-462c-9404-9c81fa5c27d3"
+    },
+    "3D!orn94": {
+      "cameraState": {
+        "perspective": true,
+        "distance": 14.98333770966882,
+        "phi": 42.88627904134381,
+        "thetaOffset": 22.082308929427324,
+        "targetOffset": [
+          -2.5145881827744665,
+          -1.987518265850629,
+          -1.620460941411021e-16
+        ],
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "targetOrientation": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "fovy": 45,
+        "near": 0.5,
+        "far": 5000
+      },
+      "followMode": "follow-pose",
+      "followTf": "map",
+      "scene": {},
+      "transforms": {},
+      "topics": {
+        "/visualization_markers": {
+          "visible": true
+        },
+        "/visualization_obstacle_grid": {
+          "visible": true,
+          "minColor": "#00000000",
+          "maxColor": "#ffff00ff"
+        },
+        "/visualization_point_cloud": {
+          "visible": true,
+          "colorField": "z",
+          "colorMode": "colormap",
+          "colorMap": "turbo"
+        },
+        "/booster_soccer/visualization_markers": {
+          "visible": true
+        },
+        "/booster_soccer/visualization_obstacle_grid": {
+          "visible": true,
+          "minColor": "#00000000",
+          "maxColor": "#ffffffff"
+        },
+        "/booster_soccer/visualization_point_cloud": {
+          "visible": true,
+          "colorField": "z",
+          "colorMode": "colormap",
+          "colorMap": "turbo",
+          "pointSize": 4
+        },
+        "/camera/robot0_rgbd_camera/depth/camera_info": {
+          "visible": false
+        }
+      },
+      "layers": {},
+      "publish": {
+        "type": "point",
+        "poseTopic": "/move_base_simple/goal",
+        "pointTopic": "/clicked_point",
+        "poseEstimateTopic": "/initialpose",
+        "poseEstimateXDeviation": 0.5,
+        "poseEstimateYDeviation": 0.5,
+        "poseEstimateThetaDeviation": 0.26179939
+      },
+      "imageMode": {},
+      "customLayers": []
+    }
+  },
+  "globalVariables": {},
+  "userNodes": {},
+  "playbackConfig": {
+    "speed": 1
+  },
+  "layout": {
+    "direction": "row",
+    "first": {
+      "first": {
+        "first": "Image!3rp8xxh",
+        "second": "Terminal!8jkcv",
+        "direction": "column",
+        "splitPercentage": 59.17874396135267
+      },
+      "second": "Publish!1hm7w2y",
+      "direction": "column",
+      "splitPercentage": 76.53061224489794
+    },
+    "second": {
+      "first": "Canvas!44ot63c",
+      "second": "3D!orn94",
+      "direction": "column",
+      "splitPercentage": 50
+    },
+    "splitPercentage": 42.05358324301844
+  },
+  "panelDataById": {
+    "Terminal!8jkcv": {}
+  }
+}

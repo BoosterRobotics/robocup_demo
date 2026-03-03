@@ -25,11 +25,19 @@ public:
         return confidence_;
     }
 
+    void setNMSThreshold(float nms_threshold) {
+        nms_threshold_ = nms_threshold;
+    }
+
+    float getNMSThreshold() {
+        return nms_threshold_;
+    }
+
     std::string getModelPath() {
         return model_path_;
     }
 
-    static std::shared_ptr<YoloV8Segmentor> CreateYoloV8Segmentor(const YAML::Node &node);
+    static std::shared_ptr<YoloV8Segmentor> CreateYoloV8Segmentor(const YAML::Node &node, const std::string &model_path_override);
     static cv::Mat DrawSegmentation(const cv::Mat &img, const std::vector<SegmentationRes> &detections);
     static const std::vector<std::string> kClassLabels;
 
@@ -38,6 +46,7 @@ protected:
         model_path_(name), confidence_(conf) {
     }
     float confidence_ = 0.2f;
+    float nms_threshold_ = 0.4f;
     std::string model_path_;
 };
 

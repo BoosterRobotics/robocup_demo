@@ -1,34 +1,105 @@
-show_res: false
 camera:
-  type: "realsense" # realsense or zed
+  # color_topic: "/camera/robot0_rgbd_camera/rgb/image_compressed" # sim
+  # depth_topic: "/camera/robot0_rgbd_camera/depth/image_raw" # sim
+  # intrin_topic: "/camera/robot0_rgbd_camera/rgb/camera_info" # sim
+
+  color_topic: "/StereoNetNode/rectified_image" # d-robotics
+  depth_topic: "/StereoNetNode/stereonet_depth" # d-robotics
+  intrin_topic: "/StereoNetNode/stereonet_depth/camera_info" # d-robotics
+
+  # color_topic: "/camera/color/image_raw" # orbbec
+  # depth_topic: "/camera/depth/image_raw" # orbbec
+  # intrin_topic: "/camera/color/camera_info" # orbbec
+
+  # color_topic: "/camera/camera/color/image_raw" # realsense
+  # depth_topic: "/camera/camera/aligned_depth_to_color/image_raw" # realsense
+  # intrin_topic: "/camera/camera/color/camera_info" # realsense
+
+  # color_topic: "/zed/zed_node/left/image_rect_color" # zed
+  # depth_topic: "/zed/zed_node/depth/depth_registered" # zed
+  # intrin_topic: "/zed/zed_node/left/camera_info" # zed
   intrin:
-    fx: 643.898
-    fy: 643.216
-    cx: 649.038
-    cy: 357.21
-    distortion_coeffs: [-0.0553056,0.065975,-0.000994232,2.98548e-05,-0.0216579]
-    distortion_model: 2 # 0: none, 1: opencv format, 2: for rs d455 only
+    fx: 206.445511
+    fy: 206.445511
+    cx: 224.958221
+    cy: 242.717239
+    distortion_model: 0
+    distortion_coeffs:
+      []
   extrin:
-    - [ 0.05659255, 0.03014561, 0.99794215, 0.04217854]
-    - [-0.99839673, 0.00283376, 0.05653273, 0.01405556]
-    - [-0.00112372,-0.9995415 , 0.03025765,-0.01538294]
-    - [ 0.        , 0.        , 0.        , 1.        ]
-  pitch_compensation: 0.0 # in degree
-  yaw_compensation: 0.0
-  z_compensation: 0.0
+    # cam(x right y down z forward) -> head(x forward y left z up)
+    # Note: pitch compensation is done in code, here we only put the real offset of
+    -
+      - 0.0753363073
+      - 0.0190046262
+      - 0.996977091
+      - -0.0122268423
+    -
+      - -0.99715662
+      - -0.000328667404
+      - 0.0753561407
+      - 0.0440084077
+    -
+      - 0.00175978895
+      - -0.999819338
+      - 0.018925827
+      - -0.0283811111
+    -
+      - 0
+      - 0
+      - 0
+      - 1
+  pitch_compensation: 0
+  yaw_compensation: 0
+  z_compensation: 0
 detection_model:
-  model_path: "./src/vision/model/best_orin.engine"  # switch to  "./src/vision/model/best_orin_10.3.engine" if u on jetpack 6.2
+  model_path: ./src/vision/model/best_digua_second_10.3.engine
   confidence_threshold: 0.2
-use_depth: true
+  nms_threshold: 0.4
+  classnames: [Ball, Goalpost, Person, LCross, TCross, XCross, PenaltyPoint, Opponent, BRMarker]
+  post_process:
+    single_ball_assumption: false
+    confidence_thresholds:
+      Ball: 0.2
+      Goalpost: 0.2
+      Person: 0.2
+      LCross: 0.1
+      TCross: 0.1
+      XCross: 0.1
+      PenaltyPoint: 0.1
+      Opponent: 0.5
+      BRMarker: 0.2
+segmentation_model:
+  model_path: ./src/vision/model/best_seg_orin_10.3.engine
+  confidence_threshold: 0.3
+  nms_threshold: 0.9
+use_depth: false
 ball_pose_estimator:
   use_depth: false
-  radius: 1.109
+  radius: 0.109
   down_sample_leaf_size: 0.01
   cluster_distance_threshold: 0.01
   fitting_distance_threshold: 0.01
+  minimum_cluster_size: 150
+  filter_distance: 1.2
+  check_ball_height: true
 human_like_pose_estimator:
   use_depth: false
   down_sample_leaf_size: 0.01
   fitting_distance_threshold: 0.01
   statistic_outlier_multiplier: 0.01
-  
+field_marker_pose_estimator:
+  refine: false
+  line_segment_area_threshold: 75
+calibration:
+  sync_max_time_diff_ms: 1400
+  offset:
+    exclude_distance: 2.0
+    zero_translation: true
+    field_marker_path: ./src/vision/config/field.yaml
+  handeye:
+    calibration_time: 2000-01-01-09-29-08
+    reprojection_error: 3.5616553263245252
+misc:
+  save_data_nonstationary: true
+robot_name: "" # If there are multiple robots, specify the name, e.g., "robot0", "robot1", etc. Leave empty for a single robot

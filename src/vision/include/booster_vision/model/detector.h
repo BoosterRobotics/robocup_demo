@@ -26,21 +26,30 @@ public:
         return confidence_;
     }
 
+    void setNMSThreshold(float nms_threshold) {
+        nms_threshold_ = nms_threshold;
+    }
+
+    float getNMSThreshold() {
+        return nms_threshold_;
+    }
+
     std::string getModelPath() {
         return model_path_;
     }
 
-    static std::shared_ptr<YoloV8Detector> CreateYoloV8Detector(const YAML::Node &node);
+    static std::shared_ptr<YoloV8Detector> CreateYoloV8Detector(const YAML::Node &node, const std::string model_path_override);
     static cv::Mat DrawDetection(const cv::Mat &img, const std::vector<DetectionRes> &detections);
     static const std::vector<std::string> kClassLabels;
 
 protected:
-    YoloV8Detector(const std::string &model_path, const float &conf) :
-        model_path_(model_path), confidence_(conf) {
+    YoloV8Detector(const std::string &model_path) :
+        model_path_(model_path) {
     }
 
     std::string model_path_;
-    float confidence_;
+    float confidence_ = 0.25f;
+    float nms_threshold_ = 0.4f;
 };
 
 } // namespace booster_vision

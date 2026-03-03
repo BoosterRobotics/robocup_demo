@@ -4,7 +4,7 @@
   <name>game_controller</name>
   <version>1.0.0</version>
   <description>robocup game_controller</description>
-  <maintainer email="lishuai@boosterobotics.com">lishuai</maintainer>
+  <maintainer email="lishuai@booster.tech">Lishuai</maintainer>
   <license>Apache-2.0</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>

@@ -38,12 +38,10 @@ struct Intrinsics {
            << "cx: " << intr.cx << std::endl
            << "cy: " << intr.cy << std::endl;
         os << "distortion_model: " << static_cast<int>(intr.model) << std::endl;
-        if (intr.model == DistortionModel::kNone) {
-            os << "distortion_coeffs: none" << std::endl;
-        } else if (intr.model == DistortionModel::kBrownConrady) {
+        if (!intr.distortion_coeffs.empty()) {
             os << "distortion_coeffs: ";
-            for (size_t i = 0; i < intr.distortion_coeffs.size(); i++) {
-                os << intr.distortion_coeffs[i] << " ";
+            for (const auto &coeff : intr.distortion_coeffs) {
+                os << coeff << " ";
             }
             os << std::endl;
         }

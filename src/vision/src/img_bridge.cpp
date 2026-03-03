@@ -108,6 +108,22 @@ cv::Mat toCVMat(const sensor_msgs::msg::Image &source) {
         return depth_mat;
     }
 
+    // Special handling for NV12 format
+    if (source.encoding == "nv12") {
+        // NV12 format: Y plane followed by interleaved UV plane
+        int width = source.width;
+        int height = source.height;
+        
+        // Create a cv::Mat for the NV12 data
+        cv::Mat nv12(height * 3 / 2, width, CV_8UC1);
+        std::memcpy(nv12.data, source.data.data(), source.data.size());
+        
+        // Convert NV12 to BGR format
+        cv::Mat bgr_mat;
+        cv::cvtColor(nv12, bgr_mat, cv::COLOR_YUV2BGR_NV12);
+        return bgr_mat;
+    }
+
     // special handling for bgra8
     if (source.encoding == enc::BGRA8) {
         int width = source.width;
@@ -144,7 +160,7 @@ cv::Mat toCVMat(const sensor_msgs::msg::Image &source) {
                 source.step);
 
     if ((rcpputils::endian::native == rcpputils::endian::big && source.is_bigendian) || (rcpputils::endian::native == rcpputils::endian::little && !source.is_bigendian) || byte_depth == 1) {
-        return mat;
+        return mat.clone();
     }
 
     // Otherwise, reinterpret the data as bytes and switch the channels accordingly

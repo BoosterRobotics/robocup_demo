@@ -1,8 +1,7 @@
-# Keep the structure consistent with TeamInfo in include/RoboCupGameControllData.h.
-# Note that coach_message and players are defined as arrays with variable length here, which is more semantically appropriate.
+# following include/RoboCupGameControllData.h's RoboCupGameControlData structure
 
 uint8 team_number           # unique team number
-uint8 team_colour           # colour of the team
+uint8 field_player_colour   # colour of the team
 uint8 score                 # team's score
 uint8 penalty_shot          # penalty shot counter
 uint16 single_shots         # bits represent penalty shot success
