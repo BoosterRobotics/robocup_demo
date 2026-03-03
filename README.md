@@ -38,7 +38,7 @@ This demo is designed for running on Booster K1, if you'd like to run this demo 
 ### About config: RLVisionKick.enableAutoVisualKick
 ```yaml
 RLVisionKick
-    enableAutoVisualKick: true // This is only support on Booster K1 with firmware higher than 1.5.2
+    enableAutoVisualKick: true // This feature is only supported on the Booster K1, requiring firmware version 1.5.2 or higher.
 ```
 
 ## Note
