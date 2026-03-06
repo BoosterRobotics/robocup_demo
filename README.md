@@ -1,4 +1,8 @@
 # Booster RoboCup Demo
+
+## NOTICE
+The latest RoboCup rules do not allow unicast communication between robots and impose limits on the data size of communication packets during matches. This part of the rules has not yet been addressed in the current open‑source code. If robot communication is required in the competition, the implementation in brain_communication.cpp needs to be modified to comply with the rules.
+
 ## introduction
 The Booster RoboCup demo allows the robot to make autonomous decisions to kick the ball and complete the full RoboCup match. It includes three programs: vision, brain, and game_controller.
 
