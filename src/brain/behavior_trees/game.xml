@@ -41,7 +41,13 @@
                         <SelfLocateEnterField />
                     </ReactiveSequence>
 
-                    <ReactiveSequence _while="gc_game_sub_state_type=='NONE'" name="normal play">
+                    <ReactiveSequence _while="gc_game_state=='PLAY' && (gc_game_sub_state_type=='NONE' || (gc_game_sub_state_type=='FREE_KICK' && local_freekick_use_custom && gc_is_sub_state_kickoff_side && local_freekick_phase=='EXECUTE'))" name="PlayUnified">
+                        <SubTree ID="StrikerPlay" _autoremap="true" _while="player_role == 'striker'" />
+                        <SubTree ID="GoalKeeperPlay" _autoremap="true" _while="player_role == 'goal_keeper'" />
+                        <!-- <SubTree ID="DefenderPlay" _autoremap="true" _while="player_role == 'defender'" /> -->
+                    </ReactiveSequence>
+
+                    <ReactiveSequence _while="gc_game_sub_state_type=='NONE' && gc_game_state!='PLAY'" name="normal play">
                         <ReactiveSequence _while="gc_game_state=='INITIAL'" name="stand at the field entrance position">
                             <CamScanField _while="!odom_calibrated"/>
                             <SubTree ID="CamFindAndTrackBall" _autoremap="true" _while="odom_calibrated" />
@@ -60,11 +66,6 @@
                             <SubTree ID="Locate" _autoremap="true" />
                         </ReactiveSequence>
 
-                        <ReactiveSequence _while="gc_game_state=='PLAY'" name="game play">
-                            <SubTree ID="StrikerPlay" _autoremap="true" _while="player_role == 'striker'" />
-                            <SubTree ID="GoalKeeperPlay" _autoremap="true" _while="player_role == 'goal_keeper'" />
-                        </ReactiveSequence>
-
                         <ReactiveSequence _while="gc_game_state=='END'" name="game end">
                             <SetVelocity />
                         </ReactiveSequence>
@@ -72,20 +73,41 @@
                     </ReactiveSequence>
 
                     <ReactiveSequence _while="gc_game_sub_state_type=='FREE_KICK' && gc_game_state=='PLAY'" name="free kick">
-                        <ReactiveSequence _while="gc_game_sub_state=='STOP'">
-                            <SubTree ID="CamFindAndTrackBall" _autoremap="true" />
-                            <SubTree ID="Locate" _autoremap="true" _while="ball_location_known"/>
-                            <SetVelocity />
+                        <ReactiveSequence _while="local_freekick_use_custom && local_freekick_phase!='EXECUTE'">
+                            <ReactiveSequence _while="local_freekick_phase=='WAIT_RESUME'">
+                                <SubTree ID="CamFindAndTrackBall" _autoremap="true" />
+                                <SubTree ID="Locate" _autoremap="true" _while="ball_location_known"/>
+                                <SetVelocity />
+                            </ReactiveSequence>
+                            <ReactiveSequence _while="local_freekick_phase=='PLACEMENT'">
+                                <SubTree ID="Locate" _autoremap="true" _while="ball_location_known" />
+                                <SubTree ID="StrikerFreekick" _autoremap="true" _while="player_role == 'striker'" />
+                                <SubTree ID="GoalKeeperFreekick" _autoremap="true" _while="player_role == 'goal_keeper'"/>
+                                <!-- <SubTree ID="DefenderFreekick" _autoremap="true" _while="player_role == 'defender'"/> -->
+                            </ReactiveSequence>
+                            <ReactiveSequence _while="local_freekick_phase=='UNPLACEMENT'">
+                                <SubTree ID="CamFindAndTrackBall" _autoremap="true" />
+                                <SubTree ID="Locate" _autoremap="true" _while="ball_location_known" />
+                                <SetVelocity />
+                            </ReactiveSequence>
                         </ReactiveSequence>
-                        <ReactiveSequence _while="gc_game_sub_state=='GET_READY'">
-                            <SubTree ID="Locate" _autoremap="true" _while="ball_location_known" />
-                            <SubTree ID="StrikerFreekick" _autoremap="true" _while="player_role == 'striker'" />
-                            <SubTree ID="GoalKeeperFreekick" _autoremap="true" _while="player_role == 'goal_keeper'"/>
-                        </ReactiveSequence>
-                        <ReactiveSequence _while="gc_game_sub_state=='SET'">
-                            <SubTree ID="CamFindAndTrackBall" _autoremap="true" />
-                            <SubTree ID="Locate" _autoremap="true" _while="ball_location_known" />
-                            <SetVelocity />
+                        <ReactiveSequence _while="!local_freekick_use_custom">
+                            <ReactiveSequence _while="gc_game_sub_state=='STOP'">
+                                <SubTree ID="CamFindAndTrackBall" _autoremap="true" />
+                                <SubTree ID="Locate" _autoremap="true" _while="ball_location_known"/>
+                                <SetVelocity />
+                            </ReactiveSequence>
+                            <ReactiveSequence _while="gc_game_sub_state=='GET_READY'">
+                                <SubTree ID="Locate" _autoremap="true" _while="ball_location_known" />
+                                <SubTree ID="StrikerFreekick" _autoremap="true" _while="player_role == 'striker'" />
+                                <SubTree ID="GoalKeeperFreekick" _autoremap="true" _while="player_role == 'goal_keeper'"/>
+                                <!-- <SubTree ID="DefenderFreekick" _autoremap="true" _while="player_role == 'defender'"/> -->
+                            </ReactiveSequence>
+                            <ReactiveSequence _while="gc_game_sub_state=='SET'">
+                                <SubTree ID="CamFindAndTrackBall" _autoremap="true" />
+                                <SubTree ID="Locate" _autoremap="true" _while="ball_location_known" />
+                                <SetVelocity />
+                            </ReactiveSequence>
                         </ReactiveSequence>
                     </ReactiveSequence>
 

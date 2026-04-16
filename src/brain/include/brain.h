@@ -229,6 +229,8 @@ private:
     void updateObstacleMemory();
 
     void updateKickoffMemory();
+    // Local phase machine for ball-out free kicks.
+    void updateLocalFreekickPhase();
 
     void updateMemory();
 

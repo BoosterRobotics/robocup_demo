@@ -89,6 +89,16 @@ Brain::Brain() : rclcpp::Node("brain_node")
     declare_parameter<double>("strategy.shoot.ymax", 0.5);
     declare_parameter<bool>("strategy.cooperation.enable_role_switch", true);
     declare_parameter<double>("strategy.cooperation.ball_control_cost_threshold", 10.0);
+    declare_parameter<bool>("strategy.enable_dribble_attack", false);
+    declare_parameter<bool>("strategy.enable_dribble_defend", false);
+    declare_parameter<double>("strategy.freekick_phase.sample_msecs", 200.0);
+    declare_parameter<double>("strategy.freekick_phase.move_small_threshold", 0.06);
+    declare_parameter<double>("strategy.freekick_phase.move_stable_msecs", 800.0);
+    declare_parameter<double>("strategy.freekick_phase.target_error_threshold", 0.35);
+    declare_parameter<double>("strategy.freekick_phase.target_fresh_msecs", 600.0);
+    declare_parameter<bool>("strategy.freekick_phase.allow_placement_timeout_fallback", false);
+    declare_parameter<double>("strategy.freekick_phase.placement_timeout_msecs", 6000.0);
+    declare_parameter<double>("strategy.freekick_phase.unplacement_timeout_msecs", 1000.0);
 
     declare_parameter<int>("obstacle_avoidance.depth_sample_step", 16);
     declare_parameter<double>("obstacle_avoidance.obstacle_min_height", 0.15);
@@ -228,10 +238,6 @@ void Brain::init()
 
         auto team_id_cb = [this](const rclcpp::Parameter &p) {
             RCLCPP_INFO(this->get_logger(), "[team_id_subscripter] team_id changed to %ld", p.as_int());
-            if (!this->communication->isTeamChanged()) {
-                RCLCPP_INFO(this->get_logger(), "[team_id_subscripter] team_id not changed, no need to re-init communication");
-                return;
-            }
             this->communication.reset();
             RCLCPP_INFO(this->get_logger(), "[team_id_subscripter] communication reset success");
             // Recreate communication object
@@ -341,29 +347,213 @@ void Brain::tick()
     tree->tick();
 }
 
-void Brain::handleSpecialStates() {
+void Brain::updateLocalFreekickPhase() {
+    static bool cached = false;
+    static double sampleMsecs = 200.0;
+    static double moveSmallThreshold = 0.06;
+    static double moveStableMsecs = 800.0;
+    static double targetErrorThreshold = 0.35;
+    static double targetFreshMsecs = 600.0;
+    static bool allowPlacementTimeoutFallback = false;
+    static double placementTimeoutMsecs = 6000.0;
+    static double unplacementTimeoutMsecs = 1000.0;
+    if (!cached) {
+        get_parameter("strategy.freekick_phase.sample_msecs", sampleMsecs);
+        get_parameter("strategy.freekick_phase.move_small_threshold", moveSmallThreshold);
+        get_parameter("strategy.freekick_phase.move_stable_msecs", moveStableMsecs);
+        get_parameter("strategy.freekick_phase.target_error_threshold", targetErrorThreshold);
+        get_parameter("strategy.freekick_phase.target_fresh_msecs", targetFreshMsecs);
+        get_parameter("strategy.freekick_phase.allow_placement_timeout_fallback", allowPlacementTimeoutFallback);
+        get_parameter("strategy.freekick_phase.placement_timeout_msecs", placementTimeoutMsecs);
+        get_parameter("strategy.freekick_phase.unplacement_timeout_msecs", unplacementTimeoutMsecs);
+        cached = true;
+    }
 
-    const double KICKOFF_DURATION = 10.0; 
+    auto now = get_clock()->now();
+    const string gameState = tree->getEntry<string>("gc_game_state");
+    const string gameSubStateType = tree->getEntry<string>("gc_game_sub_state_type");
+    const string gcSubState = tree->getEntry<string>("gc_game_sub_state");
+    const bool isBallOutSetPlay =
+        gameSubStateType == "FREE_KICK"
+        && (data->realGameSubState == "THROW_IN"
+            || data->realGameSubState == "GOAL_KICK"
+            || data->realGameSubState == "CORNER_KICK"
+            || data->realGameSubState == "DIRECT_FREEKICK"
+            || data->realGameSubState == "INDIRECT_FREEKICK"
+            || data->realGameSubState == "PENALTY_KICK");
+    const bool isSubStateKickoffSide = tree->getEntry<bool>("gc_is_sub_state_kickoff_side");
+    const bool useCustomPhase = isBallOutSetPlay && gameState == "PLAY";
+    tree->setEntry<bool>("local_freekick_use_custom", useCustomPhase);
+
+    auto resetPhase = [&]() {
+        data->localFreekickPhase = "NONE";
+        data->localFreekickPoseSampleInitialized = false;
+        data->localFreekickSeenStop = false;
+        data->localFreekickLastGcSubState = gcSubState;
+        data->localFreekickTargetUpdateTime = now;
+        tree->setEntry<string>("local_freekick_phase", "NONE");
+        tree->setEntry<bool>("local_freekick_target_valid", false);
+        tree->setEntry<double>("local_freekick_target_error", 999.0);
+        tree->setEntry<bool>("local_freekick_move_stable", false);
+    };
+
+    auto enterPhase = [&](const string &phase) {
+        data->localFreekickPhase = phase;
+        data->localFreekickPhaseStartTime = now;
+        data->localFreekickStableStartTime = now;
+        data->localFreekickLastPoseSampleTime = now;
+        data->localFreekickLastPoseSample = data->robotPoseToField;
+        data->localFreekickPoseSampleInitialized = true;
+        data->localFreekickTargetUpdateTime = now;
+        tree->setEntry<string>("local_freekick_phase", phase);
+        tree->setEntry<bool>("local_freekick_target_valid", false);
+        tree->setEntry<double>("local_freekick_target_error", 999.0);
+        tree->setEntry<bool>("local_freekick_move_stable", false);
+    };
+
+    if (!useCustomPhase) {
+        resetPhase();
+        return;
+    }
+
+    if (data->localFreekickPhase == "NONE") {
+        enterPhase("WAIT_RESUME");
+    }
+
+    if (gcSubState == "STOP") {
+        data->localFreekickSeenStop = true;
+        if (data->localFreekickPhase != "WAIT_RESUME") {
+            enterPhase("WAIT_RESUME");
+        }
+    }
+
+    const string prevGcSubState = data->localFreekickLastGcSubState;
+    const bool resumeEdge =
+        prevGcSubState == "STOP"
+        && (gcSubState == "GET_READY" || gcSubState == "SET");
+
+    if (data->localFreekickPhase == "WAIT_RESUME") {
+        const bool canEnterPlacement =
+            data->localFreekickSeenStop
+            && (resumeEdge || gcSubState == "GET_READY" || gcSubState == "SET");
+        if (canEnterPlacement) {
+            enterPhase("PLACEMENT");
+        }
+    } else if (data->localFreekickPhase == "PLACEMENT") {
+        const bool targetFresh =
+            data->localFreekickTargetUpdateTime.nanoseconds() > 0
+            && msecsSince(data->localFreekickTargetUpdateTime) <= targetFreshMsecs;
+        const bool targetValidRaw = tree->getEntry<bool>("local_freekick_target_valid");
+        const double targetError = tree->getEntry<double>("local_freekick_target_error");
+        const bool targetValid = targetValidRaw && targetFresh;
+        const bool targetOk = targetValid && targetError <= targetErrorThreshold;
+
+        if (!targetOk) {
+            // 必须先进入目标误差范围，稳定计时才开始。
+            data->localFreekickStableStartTime = now;
+        }
+
+        if (!data->localFreekickPoseSampleInitialized) {
+            data->localFreekickLastPoseSample = data->robotPoseToField;
+            data->localFreekickLastPoseSampleTime = now;
+            data->localFreekickStableStartTime = now;
+            data->localFreekickPoseSampleInitialized = true;
+        }
+
+        if (msecsSince(data->localFreekickLastPoseSampleTime) >= sampleMsecs) {
+            const auto &pose = data->robotPoseToField;
+            const auto &lastPose = data->localFreekickLastPoseSample;
+            double moved = norm(pose.x - lastPose.x, pose.y - lastPose.y);
+            if (moved > moveSmallThreshold || !targetOk) {
+                data->localFreekickStableStartTime = now;
+            }
+            data->localFreekickLastPoseSample = pose;
+            data->localFreekickLastPoseSampleTime = now;
+        }
+
+        const bool moveStable = targetOk && (msecsSince(data->localFreekickStableStartTime) >= moveStableMsecs);
+        const bool placementTimeout =
+            allowPlacementTimeoutFallback
+            && (msecsSince(data->localFreekickPhaseStartTime) >= placementTimeoutMsecs);
+        tree->setEntry<bool>("local_freekick_move_stable", moveStable);
+
+        if (isSubStateKickoffSide && (moveStable || placementTimeout)) {
+            enterPhase("UNPLACEMENT");
+        }
+    } else if (data->localFreekickPhase == "UNPLACEMENT") {
+        const bool unplacementTimeout = msecsSince(data->localFreekickPhaseStartTime) >= unplacementTimeoutMsecs;
+        if (unplacementTimeout) {
+            enterPhase("EXECUTE");
+        }
+    }
+
+    data->localFreekickLastGcSubState = gcSubState;
+    tree->setEntry<string>("local_freekick_phase", data->localFreekickPhase);
+}
+
+void Brain::handleSpecialStates() {
+    updateLocalFreekickPhase();
+    const double KICKOFF_DURATION = 10.0;
     string gameState = tree->getEntry<string>("gc_game_state");
     bool isKickoffSide = tree->getEntry<bool>("gc_is_kickoff_side");
     string gameSubStateType = tree->getEntry<string>("gc_game_sub_state_type");
-    string gameSubState = tree->getEntry<string>("gc_game_sub_state");
     bool isFreekickKickoffSide = tree->getEntry<bool>("gc_is_sub_state_kickoff_side");
+    bool useLocalFreekickPhase = tree->getEntry<bool>("local_freekick_use_custom");
+    string localFreekickPhase = tree->getEntry<string>("local_freekick_phase");
     auto now = get_clock()->now();
 
+
+    static bool lastIsKickingOffstate = false;
+    static bool lastIsFreekickKickingOff = false;
+    // 正常发球
     if (gameState == "SET" && isKickoffSide) {
         data->isKickingOff = true;
         data->kickoffStartTime = now;
+
+        if (!lastIsKickingOffstate) {
+            lastIsKickingOffstate = true;
+        }
     } else if (msecsSince(data->kickoffStartTime) > KICKOFF_DURATION * 1000) {
         data->isKickingOff = false;
+        lastIsKickingOffstate = false;
+    } else if (msecsSince(data->kickoffStartTime) > 4000) {
+        if (lastIsKickingOffstate) {
+            lastIsKickingOffstate = false;
+        }
     }
 
-    if (gameState == "PLAY" && gameSubStateType == "FREE_KICK" && isFreekickKickoffSide) {
+    bool shouldTriggerFreekickKickoff =
+        gameState == "PLAY"
+        && gameSubStateType == "FREE_KICK"
+        && isFreekickKickoffSide
+        && (!useLocalFreekickPhase || localFreekickPhase == "EXECUTE");
+    if (shouldTriggerFreekickKickoff) {
         data->isFreekickKickingOff = true;
         data->freekickKickoffStartTime = now;
-    } else if (msecsSince(data->freekickKickoffStartTime) > KICKOFF_DURATION * 1000) {
+
+        if (data->realGameSubState == "DIRECT_FREEKICK" ||
+            data->realGameSubState == "PENALTY_KICK" ||
+            data->realGameSubState == "GOAL_KICK") {
+            data->isDirectShoot = true;
+        } else if (data->realGameSubState == "INDIRECT_FREEKICK" ||
+                   data->realGameSubState == "CORNER_KICK" ||
+                   data->realGameSubState == "THROW_IN") {
+            data->isDirectShoot = false;
+        }
+
+        lastIsFreekickKickingOff = true;
+    } else if (msecsSince(data->freekickKickoffStartTime) > 5000) {
         data->isFreekickKickingOff = false;
         data->isDirectShoot = false;
+
+        if (lastIsFreekickKickingOff) {
+            lastIsFreekickKickingOff = false;
+        }
+    }
+
+    static rclcpp::Time lastStateLogTime;
+    if (!lastStateLogTime.nanoseconds() || msecsSince(lastStateLogTime) > 100) {
+        lastStateLogTime = now;
     }
 
     static int lastScore = 0;
@@ -678,38 +868,99 @@ void Brain::updateRobotMemory() {
 }
 
 void Brain::updateKickoffMemory() {
-    
     static Point ballPos;
-    const double BALL_MOVE_THRESHOLD_FACTOR = 0.15; 
-    const double BALL_MOVE_THRESHOLD_MIN = 0.3; 
-    auto ballMoved = [=]() {
-        if (!data->ballDetected) return false; 
-        double range = data->ball.range;
-        double threshold = max(range * BALL_MOVE_THRESHOLD_FACTOR, BALL_MOVE_THRESHOLD_MIN);
-        double posChange = norm(data->ball.posToRobot.x - ballPos.x, data->ball.posToRobot.y - ballPos.y);
-        return posChange > threshold;
-    };
+    static Point filteredBallPos;
+    static bool filteredBallPosInitialized = false;
+    static int consecutiveMoveCount = 0;
     static rclcpp::Time kickOffTime;
-    const double TIMEOUT = 1000 * 10; 
-    auto timeReached = [=]() {
+
+    const double BALL_MOVE_THRESHOLD_FACTOR = 0.15;
+    const double BALL_MOVE_THRESHOLD_MIN = 0.3;
+    const int CONSECUTIVE_MOVE_THRESHOLD = 3;
+    const double FILTER_ALPHA = 0.2;
+    const double MAX_JUMP_DISTANCE = 1.0;
+    const double TIMEOUT = 1000 * 10;
+
+    auto ballMoved = [this, BALL_MOVE_THRESHOLD_FACTOR, BALL_MOVE_THRESHOLD_MIN, CONSECUTIVE_MOVE_THRESHOLD, FILTER_ALPHA, MAX_JUMP_DISTANCE]() {
+        if (!data->ballDetected) {
+            consecutiveMoveCount = 0;
+            filteredBallPosInitialized = false;
+            return false;
+        }
+
+        Point currentBallPos = data->ball.posToRobot;
+        if (!filteredBallPosInitialized) {
+            filteredBallPos = currentBallPos;
+            filteredBallPosInitialized = true;
+        } else {
+            double jumpDistance = norm(
+                currentBallPos.x - filteredBallPos.x,
+                currentBallPos.y - filteredBallPos.y
+            );
+
+            if (jumpDistance < MAX_JUMP_DISTANCE) {
+                filteredBallPos.x = FILTER_ALPHA * currentBallPos.x + (1.0 - FILTER_ALPHA) * filteredBallPos.x;
+                filteredBallPos.y = FILTER_ALPHA * currentBallPos.y + (1.0 - FILTER_ALPHA) * filteredBallPos.y;
+            }
+        }
+
+        double threshold = max(data->ball.range * BALL_MOVE_THRESHOLD_FACTOR, BALL_MOVE_THRESHOLD_MIN);
+        double posChange = norm(filteredBallPos.x - ballPos.x, filteredBallPos.y - ballPos.y);
+
+        if (posChange > threshold) {
+            consecutiveMoveCount++;
+        } else {
+            consecutiveMoveCount = 0;
+        }
+
+        return consecutiveMoveCount >= CONSECUTIVE_MOVE_THRESHOLD;
+    };
+
+    auto timeReached = [this, TIMEOUT]() {
         return msecsSince(kickOffTime) > TIMEOUT;
     };
+
     bool isWaitingForKickoff = (
-        (tree->getEntry<string>("gc_game_state") == "SET"  || tree->getEntry<string>("gc_game_state") == "READY")
+        (tree->getEntry<string>("gc_game_state") == "SET" || tree->getEntry<string>("gc_game_state") == "READY")
         && !tree->getEntry<bool>("gc_is_kickoff_side")
     );
     bool isWaitingForFreekickKickoff = (
         (tree->getEntry<string>("gc_game_sub_state") == "SET" || tree->getEntry<string>("gc_game_sub_state") == "GET_READY")
         && !tree->getEntry<bool>("gc_is_sub_state_kickoff_side")
     );
-    if ( isWaitingForFreekickKickoff || isWaitingForKickoff) {
+    if (isWaitingForFreekickKickoff || isWaitingForKickoff) {
         ballPos = data->ball.posToRobot;
+        filteredBallPos = data->ball.posToRobot;
+        filteredBallPosInitialized = true;
         kickOffTime = get_clock()->now();
+        consecutiveMoveCount = 0;
         tree->setEntry<bool>("wait_for_opponent_kickoff", true);
+        data->waitForOpponentKickoffByFreekick = isWaitingForFreekickKickoff;
     } else if (tree->getEntry<bool>("wait_for_opponent_kickoff")) {
-        if (ballMoved() || timeReached()) {
+        const bool releasedByBallFree =
+            data->waitForOpponentKickoffByFreekick
+            && tree->getEntry<string>("gc_game_state") == "PLAY"
+            && tree->getEntry<string>("gc_game_sub_state_type") == "NONE";
+        if (releasedByBallFree) {
+            consecutiveMoveCount = 0;
+            filteredBallPosInitialized = false;
             tree->setEntry<bool>("wait_for_opponent_kickoff", false);
+            data->waitForOpponentKickoffByFreekick = false;
+            return;
         }
+
+        bool moved = ballMoved();
+        if (moved || timeReached()) {
+            if (moved) {
+                double threshold = max(data->ball.range * BALL_MOVE_THRESHOLD_FACTOR, BALL_MOVE_THRESHOLD_MIN);
+            }
+            consecutiveMoveCount = 0;
+            filteredBallPosInitialized = false;
+            tree->setEntry<bool>("wait_for_opponent_kickoff", false);
+            data->waitForOpponentKickoffByFreekick = false;
+        }
+    } else {
+        data->waitForOpponentKickoffByFreekick = false;
     }
 }
 
@@ -1097,116 +1348,125 @@ void Brain::joystickCallback(const booster_interface::msg::RemoteControllerState
 
 void Brain::gameControlCallback(const game_controller_interface::msg::GameControlData &msg)
 {
-    if (get_parameter(GAME_AGENT_MODE_PARAM).as_bool()) {
-        prtWarn("Agent mode, ignore game control");
-        return;
-    };
     data->timeLastGamecontrolMsg = get_clock()->now();
 
-    // Handle primary game state
-    auto lastGameState = tree->getEntry<string>("gc_game_state"); // Primary game state
+    // 处理比赛的一级状态
+    auto lastGameState = tree->getEntry<string>("gc_game_state"); // 比赛的一级状态
     vector<string> gameStateMap = {
-        "INITIAL", // Initialization state, players prepare off the field
-        "READY",   // Ready state, players enter the field and move to their starting positions
-        "SET",     // Stop action, wait for the referee to start the game
-        "PLAY",    // Normal gameplay
-        "END"      // Game over
+        "INITIAL", // 初始化状态, 球员在场外准备
+        "READY",   // 准备状态, 球员进场, 并走到自己的始发位置
+        "SET",     // 停止动作, 等待裁判机发出开始比赛的指令
+        "PLAY",    // 正常比赛
+        "END"      // 比赛结束
     };
-
-    int teamId = config->get_team_id();
-    int playerId = config->get_player_id();
     string gameState = gameStateMap[static_cast<int>(msg.state)];
     tree->setEntry<string>("gc_game_state", gameState);
-    bool isKickOffSide = (msg.kick_off_team == teamId); // Whether our team is the kickoff side
+    const int teamId = config->get_team_id();
+    const int playerId = config->get_player_id();
+    bool isKickOffSide = (static_cast<int>(msg.kicking_team) == teamId); // 我方是否是开球方
     tree->setEntry<bool>("gc_is_kickoff_side", isKickOffSide);
 
-    // Handle secondary game state
+    // 处理比赛的二级状态
     string gameSubStateType;
-    switch (static_cast<int>(msg.secondary_state)) {
+    switch (static_cast<int>(msg.set_play)) {
         case 0:
             gameSubStateType = "NONE";
             data->realGameSubState = "NONE";
+            data->isDirectShoot = false;
             break;
-        case 3:
-            gameSubStateType = "TIMEOUT"; // Includes both team timeouts and referee timeout
+        case -1:
+            gameSubStateType = "TIMEOUT"; // 包含两队 timeout 和 裁判 timeout
             data->realGameSubState = "TIMEOUT";
+            data->isDirectShoot = false;
             break;
-        // Temporarily do not handle other states, except TIMEOUT, all are treated as FREE_KICK
-        case 4:
-            // gameSubStateType = "DIRECT_FREEKICK";
+        case SET_PLAY_DIRECT_FREE_KICK:
             gameSubStateType = "FREE_KICK";
             data->realGameSubState = "DIRECT_FREEKICK";
             data->isDirectShoot = true;
             break;
-        case 5:
-            // gameSubStateType = "INDIRECT_FREEKICK";
+        case SET_PLAY_INDIRECT_FREE_KICK:
             gameSubStateType = "FREE_KICK";
             data->realGameSubState = "INDIRECT_FREEKICK";
+            data->isDirectShoot = false; // 间接任意球不能直接射门
             break;
-        case 6:
-            // gameSubStateType = "PENALTY_KICK";
+        case SET_PLAY_PENALTY_KICK:
             gameSubStateType = "FREE_KICK";
             data->realGameSubState = "PENALTY_KICK";
             data->isDirectShoot = true;
             break;
-        case 7:
-            // gameSubStateType = "CORNER_KICK";
+        case SET_PLAY_CORNER_KICK:
             gameSubStateType = "FREE_KICK";
             data->realGameSubState = "CORNER_KICK";
+            data->isDirectShoot = false; // 角球不能直接射门（需要先触球）
             break;
-        case 8:
-            // gameSubStateType = "GOAL_KICK";
+        case SET_PLAY_GOAL_KICK:
             gameSubStateType = "FREE_KICK";
             data->realGameSubState = "GOAL_KICK";
             data->isDirectShoot = true;
             break;
-        case 9:
-            // gameSubStateType = "THROW_IN";
+        case SET_PLAY_THROW_IN:
             gameSubStateType = "FREE_KICK";
             data->realGameSubState = "THROW_IN";
+            data->isDirectShoot = false; // 界外球不能直接射门
             break;
         default:
-            gameSubStateType = "FREE_KICK";
+            gameSubStateType = "NONE";
+            data->realGameSubState = "NONE";
+            data->isDirectShoot = false;
             break;
     }
-    vector<string> gameSubStateMap = {"STOP", "GET_READY", "SET"};                               // STOP: Stop; -> GET_READY: Move to offensive or defensive position; -> SET: Stand still
-    string gameSubState = gameSubStateMap[static_cast<int>(msg.secondary_state_info[1])];
+    string gameSubState = "NONE";
+    if (gameSubStateType == "FREE_KICK") {
+        // GameController v19 no longer provides an explicit set-play stage.
+        // Treat any active, non-stopped set play as the placement phase so
+        // robots can move after the referee presses "resume play".
+        if (msg.stopped != 0) {
+            gameSubState = "STOP";
+        } else {
+            gameSubState = "GET_READY";
+        }
+    }
     tree->setEntry<string>("gc_game_sub_state_type", gameSubStateType);
     tree->setEntry<string>("gc_game_sub_state", gameSubState);
-    bool isSubStateKickOffSide = (static_cast<int>(msg.secondary_state_info[0]) == teamId); // In the secondary state, whether our team is the kickoff side. For example, if the current secondary state is a free kick, whether our team is taking the free kick
+    bool isSubStateKickOffSide = (gameSubStateType == "FREE_KICK") && (static_cast<int>(msg.kicking_team) == teamId); // 在二级状态下, 我方是否是开球方. 例如, 当前二级状态为任意球, 我方是否是开任意球的一方
     tree->setEntry<bool>("gc_is_sub_state_kickoff_side", isSubStateKickOffSide);
 
     // cout << "game state: " << gameState << " game sub state type: " << gameSubStateType << endl;
-    // Find team information
+    // 找到队的信息
     game_controller_interface::msg::TeamInfo myTeamInfo;
     game_controller_interface::msg::TeamInfo oppoTeamInfo;
-    if (msg.teams[0].team_number == teamId) {
+    if (msg.teams[0].team_number == teamId)
+    {
         myTeamInfo = msg.teams[0];
         oppoTeamInfo = msg.teams[1];
-    } else if (msg.teams[1].team_number == teamId) {
+    }
+    else if (msg.teams[1].team_number == teamId)
+    {
         myTeamInfo = msg.teams[1];
         oppoTeamInfo = msg.teams[0];
-    } else {
-        // Our team is not included in the data packet, should not process further
+    }
+    else
+    {
+        // 数据包中没有包含我们的队，不应该再处理了
         prtErr(format("received invalid game controller message team0 %d, team1 %d, teamId %d",
-            msg.teams[0].team_number, msg.teams[1].team_number,teamId));
+            msg.teams[0].team_number, msg.teams[1].team_number, teamId));
         return;
     }
 
     int liveCount = 0;
     int oppoLiveCount = 0;
-    // Handle penalty state. penalty[playerId - 1] represents whether our player is in a penalty state. Handling penalty state means the player cannot move.
+    // 处理判罚状态. penalty[playerId - 1] 代表我方的球员是否处于判罚状态, 处理判罚状态意味着不能移动
     for (int i = 0; i < HL_MAX_NUM_PLAYERS; i++) {
         data->penalty[i] = static_cast<int>(myTeamInfo.players[i].penalty);
         
-        if (static_cast<int>(myTeamInfo.players[i].red_card_count) > 0) {
+        if (data->penalty[i] == PENALTY_SENT_OFF) {
             data->penalty[i] = PENALTY_SUBSTITUTE;
         }
 
         if (data->penalty[i] == PENALTY_NONE) liveCount++;
         data->oppoPenalty[i] = static_cast<int>(oppoTeamInfo.players[i].penalty);
 
-        if (static_cast<int>(oppoTeamInfo.players[i].red_card_count) > 0) {
+        if (data->oppoPenalty[i] == PENALTY_SENT_OFF) {
             data->oppoPenalty[i] = PENALTY_SUBSTITUTE;
         }
 
@@ -1215,15 +1475,16 @@ void Brain::gameControlCallback(const game_controller_interface::msg::GameContro
     data->liveCount = liveCount;
     data->oppoLiveCount = oppoLiveCount;
 
+    // cout << "penalty: " << data->penalty[0] << " " << data->penalty[1] << " " << data->penalty[2] << " " << data->penalty[3] << endl;
+    // cout << "oppo penalty: " << data->oppoPenalty[0] << " " << data->oppoPenalty[1] << " " << data->oppoPenalty[2] << " " << data->oppoPenalty[3] << endl;
     bool lastIsUnderPenalty = tree->getEntry<bool>("gc_is_under_penalty");
-    bool isUnderPenalty = (data->penalty[playerId - 1] != PENALTY_NONE); // Whether the current robot is under penalty
+    bool isUnderPenalty = (playerId > 0 && data->penalty[playerId - 1] != PENALTY_NONE); // 当前 robot 是否被判罚中
     tree->setEntry<bool>("gc_is_under_penalty", isUnderPenalty);
-    if (isUnderPenalty && !lastIsUnderPenalty) tree->setEntry<bool>("odom_calibrated", false); // If penalized, need to re-enter the field, thus need to re-localize
+    if (isUnderPenalty && !lastIsUnderPenalty) tree->setEntry<bool>("odom_calibrated", false); // 被判罚了, 则需要重新进场, 因此需要重新定位
 
-    // FOR FUN Handle goal celebration waving logic
+    // FOR FUN 处理进球后的庆祝挥手的逻辑
     data->score = static_cast<int>(myTeamInfo.score);
     data->oppoScore = static_cast<int>(oppoTeamInfo.score);
-    data->secsRemaining = static_cast<int>(msg.secs_remaining);
 }
 
 void Brain::detectionsCallback(const vision_interface::msg::Detections &msg)
@@ -2269,6 +2530,15 @@ void Brain::logStatusToConsole() {
     const int LOG_INTERVAL = 30;
     cnt++;
     if (cnt % LOG_INTERVAL == 0) {
+        const int teamId = config->get_team_id();
+        const int playerId = config->get_player_id();
+        const int numOfPlayers = config->get_num_of_players();
+        const string startRole = config->get_player_role();
+        const bool enableCom = config->get_enable_com();
+        const double vxFactor = config->get_vx_factor();
+        const double yawOffset = config->get_yaw_offset();
+        const bool isPrimaryStriker =
+            tree->getEntry<string>("player_role") == "striker" && data->tmMyCostRank == 0;
         string msg = "";
         string gameState = tree->getEntry<string>("gc_game_state");
         gameState = gameState == "" ? "-----" : gameState;
@@ -2279,36 +2549,39 @@ void Brain::logStatusToConsole() {
 
         msg += format(
             "ROBOT:\n\tTeamID: %d\tPlayerID: %d\tNumberOfPlayers: %d\tRole: %s\tStartRole: %s\n\n",
-            config->get_team_id(),
-            config->get_player_id(),
-            config->get_num_of_players(),
+            teamId,
+            playerId,
+            numOfPlayers,
             tree->getEntry<string>("player_role").c_str(),
-            config->get_player_role().c_str()
+            startRole.c_str()
         );
         msg += format(
-            "GAME:\n\tState: %s\tKickOffSide: %s\tisKickingOff: %s(%s)\n\tSubType: %s\tSubState: %s\tSubKickOffSide: %s\tisKickingOff: %s(%s)\n\tScore: %s\tJustScored: %s\n\tLiveCount: %d\tOppoLiveCount: %d\n\n", 
-            gameState.c_str(), 
+            "GAME:\n\tState: %s\tKickOffSide: %s\tisKickingOff: %s(%s)\n\tSubType: %s\tSubState: %s\tLocalFKPhase: %s\tSubKickOffSide: %s\tisKickingOff: %s(%s)\n\tScore: %s\tJustScored: %s\n\tLiveCount: %d\tOppoLiveCount: %d\tThreat: %.1f\tPrimary: %s\n\n",
+            gameState.c_str(),
             tree->getEntry<bool>("gc_is_kickoff_side") ? "YES" : "NO",
             data->isKickingOff ? "YES" : "NO",
             msecsSince(data->kickoffStartTime)/1000 > 100 ? "--" : to_string(msecsSince(data->kickoffStartTime)/1000).c_str(),
             gameSubType.c_str(),
             gameSubState.c_str(),
+            tree->getEntry<string>("local_freekick_phase").c_str(),
             tree->getEntry<bool>("gc_is_sub_state_kickoff_side") ? "YES" : "NO",
             data->isFreekickKickingOff ? "YES" : "NO",
             msecsSince(data->freekickKickoffStartTime)/1000 > 100 ? "--" : to_string(msecsSince(data->freekickKickoffStartTime)/1000).c_str(),
             format("%d:%d", data->score, data->oppoScore).c_str(),
             tree->getEntry<bool>("we_just_scored") ? "YES" : "NO",
             data->liveCount,
-            data->oppoLiveCount
+            data->oppoLiveCount,
+            data->tmMyCost,
+            isPrimaryStriker ? "YES" : "NO"
         );
         
         msg += getComLogString();
 
         msg += format(
-            "DEBUG:\n\tcom: %s\tvxFactor: %.2f\tyawOffset: %.2f\n\tControlState: %d\n\tTickTime: %.0fms",
-            config->get_enable_com() ? "YES" : "NO",
-            config->get_vx_factor(),
-            config->get_yaw_offset(),
+            "DEBUG:\n\tcom: %s\n\tvxFactor: %.2f\tyawOffset: %.2f\n\tControlState: %d\n\tTickTime: %.0fms",
+            enableCom ? "YES" : "NO",
+            vxFactor,
+            yawOffset,
             tree->getEntry<int>("control_state"),
             msecsSince(data->lastTick)
         );
@@ -2375,6 +2648,9 @@ string Brain::getComLogString() {
 }
 
 bool Brain::isFreekickStartPlacing() {
+    if (tree->getEntry<bool>("local_freekick_use_custom")) {
+        return tree->getEntry<string>("local_freekick_phase") == "PLACEMENT";
+    }
     return (tree->getEntry<string>("gc_game_sub_state_type") == "FREE_KICK" && tree->getEntry<string>("gc_game_state") == "PLAY" && tree->getEntry<string>("gc_game_sub_state") == "GET_READY");
 }
 

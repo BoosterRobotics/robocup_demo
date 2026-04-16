@@ -36,7 +36,17 @@ public:
     int liveCount = 0; 
     int oppoLiveCount = 0; 
     string realGameSubState; 
-
+    // Local phase machine for ball-out free kicks (throw-in / goal-kick / corner-kick).
+    string localFreekickPhase = "NONE";
+    string localFreekickLastGcSubState = "NONE";
+    rclcpp::Time localFreekickPhaseStartTime;
+    rclcpp::Time localFreekickStableStartTime;
+    rclcpp::Time localFreekickLastPoseSampleTime;
+    rclcpp::Time localFreekickTargetUpdateTime;
+    Pose2D localFreekickLastPoseSample;
+    bool localFreekickPoseSampleInitialized = false;
+    bool localFreekickSeenStop = false;
+    bool waitForOpponentKickoffByFreekick = false;
     /* ------------------------------------ Data recording ------------------------------------ */
 
    

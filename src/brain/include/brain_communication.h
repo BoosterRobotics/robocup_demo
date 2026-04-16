@@ -26,7 +26,6 @@ public:
     ~BrainCommunication();
     
     void initCommunication();
-    bool isTeamChanged();
 
 private:
     Brain *brain;
@@ -35,62 +34,28 @@ private:
     std::thread _gamecontrol_unicast_thread;
     void unicastToGameController();
     void clearupGameControllerUnicast();
-    std::atomic<bool> _unicast_gamecontrol_flag = false;
+    bool _unicast_gamecontrol_flag = false;
     int _gc_send_socket = -1;
     sockaddr_in _gcsaddr;
-    HlRoboCupGameControlReturnData gc_return_data;
-    static constexpr int BROADCAST_GAME_CONTROL_INTERVAL_MS = 1000;
+    RoboCupGameControlReturnData gc_return_data;
+    static constexpr int BROADCAST_GAME_CONTROL_INTERVAL_MS = 500; // 2 packets per second
 
-    const char* MULTICAST_ADDR = "239.255.255.250"; // multicast address
-    int _discovery_msg_id = 0;
-
-    void initDiscoveryBroadcast();
-    void clearupDiscoveryBroadcast();
-    void broadcastDiscovery();
-    std::thread _discovery_broadcast_thread;
-    std::atomic<bool> _broadcast_discovery_flag{false};
-    int _discovery_send_socket = -1;
-    int _discovery_udp_port = 0;
-    sockaddr_in _saddr;
-    static constexpr int BROADCAST_DISCOVERY_INTERVAL_MS = 1000;
-
-
-    void initDiscoveryReceiver();
-    void clearupDiscoveryReceiver();
-    void spinDiscoveryReceiver();
-    std::atomic<bool> _receive_discovery_flag = false;
-    std::thread _discovery_recv_thread;
-    int _discovery_recv_socket = -1;
-
-
-    struct TeammateInfo {
-        uint32_t ip;
-        int playerId;
-        rclcpp::Time lastUpdate;
-    };
-    std::map<uint32_t, TeammateInfo> _teammate_addresses; // playerId -> TeammateInfo
-    std::mutex _teammate_addresses_mutex;
-    static constexpr int TEAMMATE_TIMEOUT_MS = 20 * 1000; // 20s timeout
-    
-    void cleanupExpiredTeammates();
-
-    void initCommunicationUnicast();
-    void clearupCommunicationUnicast();
-    void unicastCommunication();
+    void initTeamBroadcast();
+    void clearupTeamBroadcast();
+    void broadcastTeamCommunication();
+    std::thread _team_broadcast_thread;
+    bool _broadcast_team_flag = false;
+    int _team_send_socket = -1;
+    int _team_udp_port = 0;
+    sockaddr_in _team_saddr;
+    static constexpr int BROADCAST_TEAM_INTERVAL_MS = 500; // 2 packets per second (complies with rules)
     int _team_communication_msg_id = 0;
-    std::atomic<bool> _unicast_communication_flag = false;
-    std::thread _unicast_thread;
-    int _unicast_socket = -1;
-    int _unicast_udp_port = 0;
-    sockaddr_in _unicast_saddr;
-    static constexpr int UNICAST_INTERVAL_MS = 100;
+    int _counted_messages = 0; // 仅在 READY/SET/PLAY 状态计数的消息数量
 
-
-    void initCommunicationReceiver();
-    void clearupCommunicationReceiver();
-    void spinCommunicationReceiver();
-    std::atomic<bool> _receive_communication_flag = false;
-    std::thread _communication_recv_thread;
-    int _communication_recv_socket = -1;
-    int _communication_recv_port = 0;
+    void initTeamReceiver();
+    void clearupTeamReceiver();
+    void spinTeamReceiver();
+    bool _receive_team_flag = false;
+    std::thread _team_recv_thread;
+    int _team_recv_socket = -1;
 };

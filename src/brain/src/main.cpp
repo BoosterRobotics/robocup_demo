@@ -40,7 +40,7 @@ int main(int argc, char **argv)
         opt.context(context);
         auto node = rclcpp::Node::make_shared("brain_node_ext", opt);
         auto sub1 = node->create_subscription<booster_interface::msg::RemoteControllerState>("/remote_controller_state", 10, bind(&Brain::joystickCallback, brain, std::placeholders::_1));
-        auto sub2 = node->create_subscription<game_controller_interface::msg::GameControlData>("/booster_soccer/game_controller", 10, bind(&Brain::gameControlCallback, brain, std::placeholders::_1));
+        auto sub2 = node->create_subscription<game_controller_interface::msg::GameControlData>("/robocup/game_controller", 10, bind(&Brain::gameControlCallback, brain, std::placeholders::_1));
         auto sub3 = node->create_subscription<std_msgs::msg::String>("/booster_agent/soccer_game_control", 1, bind(&Brain::agentCommandCallback, brain, std::placeholders::_1));
     
         rclcpp::executors::SingleThreadedExecutor executor;

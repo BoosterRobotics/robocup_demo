@@ -88,6 +88,11 @@ void BrainTree::initEntry()
     setEntry<bool>("gc_is_kickoff_side", false);
     setEntry<bool>("gc_is_sub_state_kickoff_side", false);
     setEntry<bool>("gc_is_under_penalty", false);
+    setEntry<bool>("local_freekick_use_custom", false);
+    setEntry<string>("local_freekick_phase", "NONE");
+    setEntry<bool>("local_freekick_target_valid", false);
+    setEntry<double>("local_freekick_target_error", 999.0);
+    setEntry<bool>("local_freekick_move_stable", false);
 
     setEntry<bool>("need_check_behind", false);
 
@@ -401,7 +406,11 @@ NodeStatus GoToFreekickPosition::onRunning() {
 
     string side;
     getInput("side", side);
-    if (side !="attack" && side != "defense") return NodeStatus::SUCCESS;
+    if (side !="attack" && side != "defense") {
+        brain->tree->setEntry<bool>("local_freekick_target_valid", false);
+        brain->data->localFreekickTargetUpdateTime = brain->get_clock()->now();
+        return NodeStatus::SUCCESS;
+    }
     
     Pose2D targetPose;
     auto fd = brain->config->fieldDimensions;
@@ -449,6 +458,9 @@ NodeStatus GoToFreekickPosition::onRunning() {
 
     double dist = norm(targetPose.x - robotPose.x, targetPose.y - robotPose.y);
     double deltaDir = toPInPI(targetPose.theta - robotPose.theta);
+    brain->tree->setEntry<bool>("local_freekick_target_valid", true);
+    brain->tree->setEntry<double>("local_freekick_target_error", dist);
+    brain->data->localFreekickTargetUpdateTime = brain->get_clock()->now();
 
 
     if ( // Considered to have reached the target position
@@ -530,6 +542,9 @@ NodeStatus GoToGoalBlockingPosition::tick() {
     }
 
     double dist = norm(targetPose.x - robotPose.x, targetPose.y - robotPose.y);
+    brain->tree->setEntry<bool>("local_freekick_target_valid", true);
+    brain->tree->setEntry<double>("local_freekick_target_error", dist);
+    brain->data->localFreekickTargetUpdateTime = brain->get_clock()->now();
     if ( // Considered to have reached the target position
         dist < distTolerance
         && fabs(brain->data->ball.yawToRobot) < thetaTolerance

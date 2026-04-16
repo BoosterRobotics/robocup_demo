@@ -14,15 +14,15 @@ def generate_launch_description():
             output='screen',
             parameters=[
                 {
-                    # The port to listen on, default is the GameController broadcast port 3838
+                    # 监听的端口，默认为 GameController 广播端口 3838
                     "port": 3838,
 
-                    # control if to enable IP white list check, default False, if True, only packets from IPs in ip_white_list will be accepted
-                    "enable_ip_white_list": False,
+                    # 是否开启 IP 白名单，开启后会忽略非白名单 IP 发的广播消息，默认不应该开启
+                    "enable_ip_white_list": True,
 
-                    # only accept packets from these IP addresses if enable_ip_white_list is True, default empty
+                    # 只接收指定
                     "ip_white_list": [
-                        "127.0.0.1",
+                        "192.168.50.217",
                     ],
                 }
             ]

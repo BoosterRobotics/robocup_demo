@@ -13,6 +13,7 @@ struct TeamCommunicationMsg
     int playerRole; // 1: striker, 2: goal_keeper, 3: unknown
     bool isAlive; // Whether on the field and not currently penalized
     bool isLead; // Whether in ball-control state
+    bool isInVisualKick; // Whether robot is currently running VisualKick
     bool ballDetected;
     bool ballLocationKnown;
     double ballConfidence;

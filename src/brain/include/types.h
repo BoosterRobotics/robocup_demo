@@ -188,6 +188,7 @@ struct RobotRecoveryStateData {
 struct TMStatus {
     string role = "not initialized"; // striker, goal_keeper
     bool isAlive = false;
+    bool isInVisualKick = false;
     bool ballDetected = false;
     bool ballLocationKnown = false;
     double ballConfidence = 0.;
