@@ -41,6 +41,7 @@ void BrainTree::init()
     REGISTER_BUILDER(CamFastScan)
     REGISTER_BUILDER(CamScanField)
     REGISTER_BUILDER(SetVelocity)
+    REGISTER_BUILDER(RobocupWalk)
     REGISTER_BUILDER(StepOnSpot)
     REGISTER_BUILDER(GoToFreekickPosition)
     REGISTER_BUILDER(GoToReadyPosition)
@@ -127,6 +128,13 @@ NodeStatus SetVelocity::tick()
     getInput("theta", theta);
 
     auto res = brain->client->setVelocity(x, y, theta);
+    return NodeStatus::SUCCESS;
+}
+
+NodeStatus RobocupWalk::tick()
+{
+    // Intended to be wrapped by a RunOnce decorator at behavior-tree startup.
+    brain->client->changeRobocupMode();
     return NodeStatus::SUCCESS;
 }
 

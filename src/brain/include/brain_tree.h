@@ -546,6 +546,22 @@ private:
     Brain *brain;
 };
 
+/**
+ * @brief Switch robot to robocup walking mode (kSoccer) and exit VisualKick(false)
+ *
+ * This node is intended to be executed once when the whole behavior tree starts.
+ */
+class RobocupWalk : public SyncActionNode
+{
+public:
+    RobocupWalk(const string &name, const NodeConfig &config, Brain *_brain) : SyncActionNode(name, config), brain(_brain) {}
+
+    NodeStatus tick() override;
+
+private:
+    Brain *brain;
+};
+
 class StepOnSpot : public SyncActionNode
 {
 public:

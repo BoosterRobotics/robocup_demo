@@ -64,8 +64,8 @@ brain_node:
       autoVisualKickEnableAngle: 0.8
 
     locator:
-      min_marker_count: 5
-      max_residual: 0.35
+      min_marker_count: 3
+      max_residual: 0.5
 
     enable_com: true
     
@@ -81,9 +81,9 @@ brain_node:
         # depth_image_topic: "/zed/zed_node/depth/depth_registered" # zed
         # depth_camera_info_topic: "/zed/zed_node/depth/camera_info" # zed
 
-        image_camera_info_topic: "/StereoNetNode/rectified_image" # d-robotics
-        depth_image_topic: "/StereoNetNode/stereonet_depth" # d-robotics
-        depth_camera_info_topic: "/StereoNetNode/stereonet_depth/camera_info" # d-robotics
+        image_camera_info_topic: "/boostercamera/head/rgb" # d-robotics
+        depth_image_topic: "/boostercamera/head/depth" # d-robotics
+        depth_camera_info_topic: "/boostercamera/head/depth/camera_info" # d-robotics
 
         
         # image_camera_info_topic: "/camera/robot0_rgbd_camera/rgb/camera_info" # simulated

@@ -10,6 +10,7 @@
     <include path="./subtrees/subtree_auto_standup_and_locate.xml" />
     <BehaviorTree ID="MainTree">
         <Sequence name="root">
+            <!-- <RunOnce><RobocupWalk /></RunOnce> -->
             <RunOnce><Script code="control_state=3" /></RunOnce>
             <ReactiveSequence _while="control_state==1 || assist_kick || go_manual || assist_chase" >
                 <SimpleChase _while="assist_chase" vx_limit="1.5" vy_limit="0.1" stop_dist="0.0" stop_angle="0.3" />
@@ -19,6 +20,7 @@
             </ReactiveSequence>
 
             <ReactiveSequence _while="control_state==2" name="if you need to pickup, go to the field entrance position, then press LT + A, recalibrate and locate, wait for a few seconds, then press LT + B to continue">
+                <RunOnce><RobocupWalk /></RunOnce>
                 <CamScanField  _while="!odom_calibrated"/>
                 <SubTree ID="CamFindAndTrackBall" _autoremap="true" _while="odom_calibrated" />
                 <SelfLocateEnterField />
