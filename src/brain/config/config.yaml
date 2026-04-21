@@ -81,7 +81,7 @@ brain_node:
         # depth_image_topic: "/zed/zed_node/depth/depth_registered" # zed
         # depth_camera_info_topic: "/zed/zed_node/depth/camera_info" # zed
 
-        image_camera_info_topic: "/boostercamera/head/rgb" # d-robotics
+        image_camera_info_topic: "/boostercamera/head/rgb/camera_info" # d-robotics
         depth_image_topic: "/boostercamera/head/depth" # d-robotics
         depth_camera_info_topic: "/boostercamera/head/depth/camera_info" # d-robotics
 
