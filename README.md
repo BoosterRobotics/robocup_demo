@@ -20,6 +20,12 @@ sudo apt-get install ros-humble-backward-ros
 ```
 
 ```bash
+# Install whistle_detection build dependencies (ALSA capture + FFTW float)
+sudo apt-get update
+sudo apt-get install libasound2-dev libfftw3-dev
+```
+
+```bash
 # Install onnxruntime (If you want to run without cuda)
 
 ./third_party_aarch64/install_onnxruntime.sh # if aarch64

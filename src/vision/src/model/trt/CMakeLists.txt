@@ -1,6 +1,6 @@
 # add_definitions(-DAPI_EXPORTS)
 
-set(CMAKE_CUDA_COMPILER /usr/local/cuda/bin/nvcc)
+# set(CMAKE_CUDA_COMPILER /usr/local/cuda/bin/nvcc)
 enable_language(CUDA)
 
 set(SRCS block.cpp
@@ -17,7 +17,8 @@ add_library(yolov8_trt SHARED ${SRCS})
 target_link_libraries(yolov8_trt PRIVATE nvinfer
                                          cudart
                                  PUBLIC ${OpenCV_LIBS})
-target_compile_options(yolov8_trt PRIVATE -w -Wno-dev)
+# target_compile_options(yolov8_trt PRIVATE -w -Wno-dev)
+target_compile_options(yolov8_trt PRIVATE -w)
 install(TARGETS yolov8_trt DESTINATION lib)
                               
 add_executable(yolov8_det yolov8_det.cpp)

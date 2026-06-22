@@ -29,7 +29,42 @@ brain_node:
       near_ball_speed_limit: 0.2
       near_ball_range: 3.0
       abort_kick_when_ball_moved: true
+      soft_kickoff: false
+      soft_kickoff_speed: 0.3
       ball_out_threshold: 2.0
+      freekick_kicker_touch:
+        enable: true
+        close_dist: 0.40
+        release_dist: 0.70
+        cost_penalty: 100.0
+        cost_penalty_msecs: 5000.0
+      freekick_defense:
+        exit_margin: 0.25 # 非开球方任意球时，只比规则避让半径多退一点，减少退得过远
+        primary_buffer: 0.00 # 主力默认停在避让半径外一点
+        goal_kick_primary_buffer: 0.00 # 门球时同样只退出避让半径
+        secondary_buffer: 0.15 # 第二防守点只略微更远，主要靠横向展开
+        secondary_lateral_offset: 0.35 # 第二防守点沿切线方向的横向展开距离
+        field_margin_x: 0.35 # 站位点距底线/边界的最小 X 安全边距
+        field_margin_y: 0.60 # 站位点距边线的最小 Y 安全边距
+        own_penalty_exit_margin: 0.20 # 当任意球发生在本方禁区内时，额外退到禁区外的安全边距
+        opponent_goal_kick_penalty_exit_margin: 0.50 # 对方门球时，防守方目标点位于对方大禁区线外 0.5m
+        opponent_goal_kick_ball_clearance: 0.70 # 对方门球退让路径与球至少保持 0.7m 安全半径
+        arrive_dist_tolerance: 0.25 # 防守任意球认为已到位的距离阈值
+        arrive_theta_tolerance: 0.14 # 防守任意球认为已到位的朝向阈值，保证始终盯球
+        ball_clearance: 0.30 # 防守任意球时任何贴球/回场动作至少保持 30cm
+        path_ball_clearance: 0.30 # 移动路径与球过近时，强制优先后退/绕开的距离阈值
+        goal_line_exception_x_margin: 0.20 # 球门线例外：判定机器人在本方球门线附近的 X 容差
+        goal_line_exception_y_margin: 0.10 # 球门线例外：判定机器人在两门柱之间的额外 Y 容差
+        fast_exit_back_speed: 0.55 # 仍在安全圈内时，优先正对球后退的目标速度
+        fast_exit_release_margin: 0.04 # 快速退圈模式的释放边距，刚出避让半径就停止继续后退
+        fast_exit_turn_gain: 2.20 # 快速退圈时朝向球的转向增益
+        fast_exit_max_lateral: 0.08 # 快速退圈时允许的最大侧向修正，默认尽量少横移
+        fast_exit_path_ball_clearance: 0.30 # 快速退圈阶段至少保持 30cm，不再因为过大路径阈值退得很远
+        boundary_arc_speed: 0.75 # 退到合法半径后，沿避让圆弧快速移动到最佳站位的速度上限
+        boundary_arc_radius_margin: 0.06 # 圆弧移动时相对避让半径保留的额外安全边距
+        boundary_arc_step: 0.55 # 每次圆弧切向追踪的最大角度步长，越大越果断
+        boundary_arc_min_angle: 0.10 # 角度差超过该值时优先沿圆弧切向移动
+        boundary_arc_direct_dist: 0.45 # 距离最佳点仍超过该值时，即使角度差不大也用快速边界移动
       cooperation:
         enable_role_switch: false
         ball_control_cost_threshold: 20.0
@@ -62,12 +97,16 @@ brain_node:
       autoVisualKickEnableDistMin: 0.2
       autoVisualKickEnableDistMax: 4.0
       autoVisualKickEnableAngle: 0.8
+      lowPassPower: 1.8
+      highPassPower: 2.5
+      visualKickVersion: kV2  # kV1|kV2
 
     locator:
       min_marker_count: 5
       max_residual: 0.35
 
     enable_com: true
+    team_comm_frequency_hz: 2.0  # 队内通信广播频率(Hz)，默认 2Hz；RoboCup 规则上限 2 包/秒，超过会告警但仍生效
     
     recovery:
       retry_max_count: 2
@@ -81,13 +120,13 @@ brain_node:
         # depth_image_topic: "/zed/zed_node/depth/depth_registered" # zed
         # depth_camera_info_topic: "/zed/zed_node/depth/camera_info" # zed
 
-        image_camera_info_topic: "/StereoNetNode/rectified_image" # d-robotics
-        depth_image_topic: "/StereoNetNode/stereonet_depth" # d-robotics
-        depth_camera_info_topic: "/StereoNetNode/stereonet_depth/camera_info" # d-robotics
+        image_camera_info_topic: "/boostercamera/head/rgb/camera_info" # d-robotics
+        depth_image_topic: "/boostercamera/head/depth" # d-robotics
+        depth_camera_info_topic: "/boostercamera/head/depth/camera_info" # d-robotics
 
         
         # image_camera_info_topic: "/camera/robot0_rgbd_camera/rgb/camera_info" # simulated
         # depth_image_topic: "/camera/robot0_rgbd_camera/depth/image_raw" # simulated
         # depth_camera_info_topic: "/camera/robot0_rgbd_camera/depth/camera_info" # simulated
     
-    game_control_ip: "192.168.50.217"
+    game_control_ip: "192.168.30.170"

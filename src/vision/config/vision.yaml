@@ -3,9 +3,9 @@ camera:
   # depth_topic: "/camera/robot0_rgbd_camera/depth/image_raw" # sim
   # intrin_topic: "/camera/robot0_rgbd_camera/rgb/camera_info" # sim
 
-  color_topic: "/StereoNetNode/rectified_image" # d-robotics
-  depth_topic: "/StereoNetNode/stereonet_depth" # d-robotics
-  intrin_topic: "/StereoNetNode/stereonet_depth/camera_info" # d-robotics
+  color_topic: "/boostercamera/head/rgb" # d-robotics
+  depth_topic: "/boostercamera/head/depth" # d-robotics
+  intrin_topic: "/boostercamera/head/rgb/camera_info" # d-robotics
 
   # color_topic: "/camera/color/image_raw" # orbbec
   # depth_topic: "/camera/depth/image_raw" # orbbec

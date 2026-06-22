@@ -453,6 +453,17 @@ private:
     Brain *brain;
 };
 
+class RobocupWalk : public SyncActionNode
+{
+public:
+    RobocupWalk(const string &name, const NodeConfig &config, Brain *_brain) : SyncActionNode(name, config), brain(_brain) {}
+
+    NodeStatus tick() override;
+
+private:
+    Brain *brain;
+};
+
 class GoToReadyPosition : public SyncActionNode
 {
 public:
@@ -628,9 +639,9 @@ public:
     {
         return {
             InputPort<string>("side", "attack", "attack | defense"),
-            InputPort<double>("attack_dist", 0.7, "attack side target dist to ball"),
+            InputPort<double>("attack_dist", 0.6, "attack side target dist to ball"),
             InputPort<double>("defense_dist", 1.9, "defense side target dist to ball"),
-            InputPort<double>("vx_limit", 1.2, "vx limit"),
+            InputPort<double>("vx_limit", 0.7, "vx limit"),
             InputPort<double>("vy_limit", 0.5, "vy limit"),
 
         };
@@ -644,7 +655,19 @@ public:
 
 private:
     Brain *brain;
-    bool _isInFinalAdjust = false; 
+    bool _isInFinalAdjust = false;
+    int _stableCostRank = 0;
+    int _costRankCandidate = 0;
+    int64_t _costRankCandidateStartNs = 0;
+    static constexpr int64_t COST_RANK_STABLE_MS = 800;
+    bool _defenseTargetLocked = false;
+    Pose2D _lockedDefenseTarget;
+    Point _lockedDefenseBallPos{0.0, 0.0, 0.0};
+    string _lockedDefenseSubState = "";
+    bool _lockedDefenseOpponentGoalKick = false;
+    int _lockedDefenseRank = 0;
+    bool _opponentGoalKickBallFrozen = false;
+    Point _frozenOpponentGoalKickBallPos{0.0, 0.0, 0.0};
 };
 
 class GoBackInField : public SyncActionNode

@@ -52,7 +52,13 @@ int RobotClient::RLVisionKick(bool start)
     booster_interface::msg::BoosterApiReqMsg msg;
     msg.api_id = static_cast<int64_t>(booster::robot::b1::LocoApiId::kVisualKick);
     nlohmann::json body;
-    body["start"] = start;  // Add start parameter to indicate whether to enter VisualKick mode
+    body["start"] = start;
+    // Match VisualKickParameter::ToJson(): firmware expects version; kV2 preserves prior visual-kick behavior.
+    const std::string vkVersion = brain->config->get_rl_vision_kick_version();
+    const auto vkEnum = (vkVersion == "kV1")
+        ? booster::robot::b1::VisualKickVersion::kV1
+        : booster::robot::b1::VisualKickVersion::kV2;  // Invalid values fall back to kV2.
+    body["version"] = static_cast<int>(vkEnum);
     msg.body = body.dump();
     std::cout << "RobotClient::RLVisionKick called with start=" << (start ? "true" : "false") << std::endl;
     return call(msg);
@@ -60,8 +66,20 @@ int RobotClient::RLVisionKick(bool start)
 
 int RobotClient::robocupWalk()
 {
-    std::cout << "RobotClient::robocupWalk CreateChangeModeMsg called" << std::endl;
-    return call(booster_interface::CreateChangeModeMsg(booster::robot::RobotMode::kWalking));
+    std::cout << "RobotClient::robocupWalk exit VisualKick(false)" << std::endl;
+
+    // Only exit VisualKick mode; gait/mode switch is handled elsewhere.
+    return RLVisionKick(false);
+}
+
+int RobotClient::changeRobocupMode()
+{
+    std::cout << "RobotClient::changeRobocupMode switch to kSoccer and exit VisualKick(false)" << std::endl;
+
+    int ret = call(booster_interface::CreateChangeModeMsg(booster::robot::RobotMode::kSoccer));
+    if (ret != 0) return ret;
+
+    return RLVisionKick(false);
 }
 
 int RobotClient::enterDamping()

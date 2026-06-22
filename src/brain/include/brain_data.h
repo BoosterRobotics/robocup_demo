@@ -32,6 +32,10 @@ public:
     bool isKickingOff = false; 
     rclcpp::Time kickoffStartTime; 
     bool isFreekickKickingOff = false; 
+    bool freekickOffenseKickerActive = false;
+    bool freekickKickerTouchArmed = false;
+    bool freekickKickerTouchCostPenaltyActive = false;
+    rclcpp::Time freekickKickerTouchCostPenaltyStartTime;
     rclcpp::Time freekickKickoffStartTime; 
     int liveCount = 0; 
     int oppoLiveCount = 0; 
@@ -47,6 +51,22 @@ public:
     bool localFreekickPoseSampleInitialized = false;
     bool localFreekickSeenStop = false;
     bool waitForOpponentKickoffByFreekick = false;
+
+    /* ------------------------------------ Whistle detection ------------------------------------ */
+    bool whistleTriggeredPlay = false; // 是否通过哨声检测触发 PLAY 状态
+    rclcpp::Time whistleDetectedTime; // 哨声检测的时间戳
+    bool opponentKickoffWhistlePending = false; // 对方普通开球 SET 阶段听到哨声后，等待本地释放条件
+    rclcpp::Time opponentKickoffWhistleTime; // 对方普通开球哨声时间
+    Point opponentKickoffWhistleBallPosToRobot{0.0, 0.0, 0.0}; // 对方普通开球本地释放时用于判断球明显移动的基准
+    Point opponentKickoffWhistleFilteredBallPosToRobot{0.0, 0.0, 0.0};
+    bool opponentKickoffWhistleBallInitialized = false;
+    bool opponentKickoffWhistleSawBallInsideCenter = false;
+    int opponentKickoffWhistleMoveCount = 0;
+    int opponentKickoffWhistleOutsideAfterInsideCount = 0;
+    int opponentKickoffWhistleOutsideAnyCount = 0;
+    bool opponentKickoffLocalPlayOverride = false; // 本地判定对方已开球后，防止 GC SET 把状态拉回
+    rclcpp::Time opponentKickoffLocalPlayOverrideTime; // 本地 PLAY override 的开始时间
+
     /* ------------------------------------ Data recording ------------------------------------ */
 
    

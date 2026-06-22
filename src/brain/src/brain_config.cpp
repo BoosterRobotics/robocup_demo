@@ -145,6 +145,14 @@ bool BrainConfig::get_abort_kick_when_ball_moved() {
     return static_cast<rclcpp::Node*>(brain)->get_parameter_or("strategy.abort_kick_when_ball_moved", true);
 }
 
+bool BrainConfig::get_soft_kickoff() {
+    return static_cast<rclcpp::Node*>(brain)->get_parameter_or("strategy.soft_kickoff", false);
+}
+
+double BrainConfig::get_soft_kickoff_speed() {
+    return static_cast<rclcpp::Node*>(brain)->get_parameter_or("strategy.soft_kickoff_speed", 0.3);
+}
+
 bool BrainConfig::get_enable_role_switch() {
     return static_cast<rclcpp::Node*>(brain)->get_parameter_or("strategy.cooperation.enable_role_switch", false);
 }
@@ -170,6 +178,18 @@ double BrainConfig::get_auto_visual_kick_enable_angle() {
     return static_cast<rclcpp::Node*>(brain)->get_parameter_or("RLVisionKick.autoVisualKickEnableAngle", 0.5);
 }
 
+double BrainConfig::get_rl_vision_kick_low_pass_power() {
+    return static_cast<rclcpp::Node*>(brain)->get_parameter_or("RLVisionKick.lowPassPower", 1.8);
+}
+
+double BrainConfig::get_rl_vision_kick_high_pass_power() {
+    return static_cast<rclcpp::Node*>(brain)->get_parameter_or("RLVisionKick.highPassPower", 2.5);
+}
+
+string BrainConfig::get_rl_vision_kick_version() {
+    return static_cast<rclcpp::Node*>(brain)->get_parameter_or("RLVisionKick.visualKickVersion", std::string("kV2"));
+}
+
 
 int BrainConfig::get_min_marker_count() {
     return static_cast<rclcpp::Node*>(brain)->get_parameter_or("locator.min_marker_count", 5);
@@ -183,6 +203,10 @@ double BrainConfig::get_max_residual() {
 
 bool BrainConfig::get_enable_com() {
     return static_cast<rclcpp::Node*>(brain)->get_parameter_or("enable_com", false);
+}
+
+double BrainConfig::get_team_comm_frequency_hz() {
+    return static_cast<rclcpp::Node*>(brain)->get_parameter_or("team_comm_frequency_hz", 2.0);
 }
 
 
@@ -574,5 +598,6 @@ void BrainConfig::print(ostream &os)
     os << "----------------------------------------" << endl;
     os << "Communication:" << endl;
     os << "    enableCom = " << get_enable_com() << endl;
+    os << "    teamCommFrequencyHz = " << get_team_comm_frequency_hz() << endl;
     os << "----------------------------------------" << endl;
 }

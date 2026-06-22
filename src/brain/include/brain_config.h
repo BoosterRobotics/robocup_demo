@@ -59,6 +59,8 @@ public:
     double get_near_ball_range();
     double get_ball_out_threshold();
     bool get_abort_kick_when_ball_moved();
+    bool get_soft_kickoff();
+    double get_soft_kickoff_speed();
     bool get_enable_role_switch();
     double get_ball_control_cost_threshold();
 
@@ -66,12 +68,16 @@ public:
     double get_auto_visual_kick_enable_dist_min();
     double get_auto_visual_kick_enable_dist_max();
     double get_auto_visual_kick_enable_angle();
+    double get_rl_vision_kick_low_pass_power();
+    double get_rl_vision_kick_high_pass_power();
+    string get_rl_vision_kick_version();
 
     int get_min_marker_count();
     double get_max_residual();
 
 
     bool get_enable_com();
+    double get_team_comm_frequency_hz();
 
     string get_tree_file_path();
 

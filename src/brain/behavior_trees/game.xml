@@ -19,6 +19,7 @@
             </ReactiveSequence>
 
             <ReactiveSequence _while="control_state==2" name="if you need to pickup, go to the field entrance position, then press LT + A, recalibrate and locate, wait for a few seconds, then press LT + B to continue">
+                <RunOnce><RobocupWalk /></RunOnce>
                 <CamScanField  _while="!odom_calibrated"/>
                 <SubTree ID="CamFindAndTrackBall" _autoremap="true" _while="odom_calibrated" />
                 <SelfLocateEnterField />

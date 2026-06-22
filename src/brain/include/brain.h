@@ -135,6 +135,7 @@ public:
 
 
     void updateCostToKick();
+    void updateFreekickKickerTouchCostPenalty();
 
     /**
      * @brief Publish visualization markers (robot position, ball position, field lines, mark points)
@@ -219,6 +220,13 @@ public:
      */
     void agentCommandCallback(const std_msgs::msg::String::SharedPtr msg);
 
+    /**
+     * whistle detection
+     */
+    void whistleDetectionCallback(const std_msgs::msg::String &msg);
+    void releaseOpponentKickoffWait(const std::string &reason, const std::string &detail, bool switchToPlay, bool keepLocalPlayOverride);
+    void resetOpponentKickoffWhistleState(const std::string &reason, bool clearLocalPlayOverride);
+
 private:
     void loadConfig();
 
@@ -282,6 +290,7 @@ private:
     rclcpp::Subscription<sensor_msgs::msg::CompressedImage>::SharedPtr compressedDepthImageSubscription;
     rclcpp::Subscription<geometry_msgs::msg::Pose>::SharedPtr headPoseSubscription;
     rclcpp::Subscription<booster_interface::msg::RawBytesMsg>::SharedPtr recoveryStateSubscription;
+    rclcpp::Subscription<std_msgs::msg::String>::SharedPtr whistleDetectionSubscription;
     rclcpp::TimerBase::SharedPtr timer_;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pubVisualizationMarkers;
     rclcpp::Publisher<std_msgs::msg::Float64MultiArray>::SharedPtr pubFieldDimensions;

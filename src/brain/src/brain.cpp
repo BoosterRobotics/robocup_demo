@@ -65,6 +65,8 @@ Brain::Brain() : rclcpp::Node("brain_node")
     declare_parameter<double>("strategy.near_ball_speed_limit", 0.3);
     declare_parameter<double>("strategy.near_ball_range", 4.0);
     declare_parameter<bool>("strategy.abort_kick_when_ball_moved", false);
+    declare_parameter<bool>("strategy.soft_kickoff", false);
+    declare_parameter<double>("strategy.soft_kickoff_speed", 0.3);
     declare_parameter<bool>("strategy.enable_bypass", false);
     declare_parameter<bool>("strategy.enable_shoot", false);
     declare_parameter<bool>("strategy.enable_directional_kick", false);
@@ -99,6 +101,37 @@ Brain::Brain() : rclcpp::Node("brain_node")
     declare_parameter<bool>("strategy.freekick_phase.allow_placement_timeout_fallback", false);
     declare_parameter<double>("strategy.freekick_phase.placement_timeout_msecs", 6000.0);
     declare_parameter<double>("strategy.freekick_phase.unplacement_timeout_msecs", 1000.0);
+    declare_parameter<bool>("strategy.freekick_kicker_touch.enable", true);
+    declare_parameter<double>("strategy.freekick_kicker_touch.close_dist", 0.20);
+    declare_parameter<double>("strategy.freekick_kicker_touch.release_dist", 0.50);
+    declare_parameter<double>("strategy.freekick_kicker_touch.cost_penalty", 100.0);
+    declare_parameter<double>("strategy.freekick_kicker_touch.cost_penalty_msecs", 5000.0);
+    declare_parameter<double>("strategy.freekick_defense.exit_margin", 0.25);
+    declare_parameter<double>("strategy.freekick_defense.primary_buffer", 0.00);
+    declare_parameter<double>("strategy.freekick_defense.goal_kick_primary_buffer", 0.00);
+    declare_parameter<double>("strategy.freekick_defense.secondary_buffer", 0.15);
+    declare_parameter<double>("strategy.freekick_defense.secondary_lateral_offset", 0.35);
+    declare_parameter<double>("strategy.freekick_defense.field_margin_x", 0.35);
+    declare_parameter<double>("strategy.freekick_defense.field_margin_y", 0.60);
+    declare_parameter<double>("strategy.freekick_defense.own_penalty_exit_margin", 0.20);
+    declare_parameter<double>("strategy.freekick_defense.opponent_goal_kick_penalty_exit_margin", 0.50);
+    declare_parameter<double>("strategy.freekick_defense.opponent_goal_kick_ball_clearance", 0.70);
+    declare_parameter<double>("strategy.freekick_defense.arrive_dist_tolerance", 0.25);
+    declare_parameter<double>("strategy.freekick_defense.arrive_theta_tolerance", 0.14);
+    declare_parameter<double>("strategy.freekick_defense.ball_clearance", 0.30);
+    declare_parameter<double>("strategy.freekick_defense.path_ball_clearance", 0.30);
+    declare_parameter<double>("strategy.freekick_defense.goal_line_exception_x_margin", 0.20);
+    declare_parameter<double>("strategy.freekick_defense.goal_line_exception_y_margin", 0.10);
+    declare_parameter<double>("strategy.freekick_defense.fast_exit_back_speed", 0.55);
+    declare_parameter<double>("strategy.freekick_defense.fast_exit_release_margin", 0.04);
+    declare_parameter<double>("strategy.freekick_defense.fast_exit_turn_gain", 2.20);
+    declare_parameter<double>("strategy.freekick_defense.fast_exit_max_lateral", 0.08);
+    declare_parameter<double>("strategy.freekick_defense.fast_exit_path_ball_clearance", 0.30);
+    declare_parameter<double>("strategy.freekick_defense.boundary_arc_speed", 0.75);
+    declare_parameter<double>("strategy.freekick_defense.boundary_arc_radius_margin", 0.06);
+    declare_parameter<double>("strategy.freekick_defense.boundary_arc_step", 0.55);
+    declare_parameter<double>("strategy.freekick_defense.boundary_arc_min_angle", 0.10);
+    declare_parameter<double>("strategy.freekick_defense.boundary_arc_direct_dist", 0.45);
 
     declare_parameter<int>("obstacle_avoidance.depth_sample_step", 16);
     declare_parameter<double>("obstacle_avoidance.obstacle_min_height", 0.15);
@@ -126,11 +159,15 @@ Brain::Brain() : rclcpp::Node("brain_node")
     declare_parameter<double>("RLVisionKick.autoVisualKickEnableDistMin", 0.5);
     declare_parameter<double>("RLVisionKick.autoVisualKickEnableDistMax", 1.5);
     declare_parameter<double>("RLVisionKick.autoVisualKickEnableAngle", 0.5);
+    declare_parameter<double>("RLVisionKick.lowPassPower", 1.8);
+    declare_parameter<double>("RLVisionKick.highPassPower", 2.5);
+    declare_parameter<std::string>("RLVisionKick.visualKickVersion", "kV2");
     
     declare_parameter<int>("locator.min_marker_count", 5);
     declare_parameter<double>("locator.max_residual", 0.3);
 
     declare_parameter<bool>("enable_com", true);
+    declare_parameter<double>("team_comm_frequency_hz", 2.0);
 
     declare_parameter<string>("vision.image_camera_info_topic", "/camera/color/camera_info");
     declare_parameter<string>("vision.depth_image_topic", "/camera/camera/aligned_depth_to_color/image_raw");
@@ -202,6 +239,7 @@ void Brain::init()
     lowStateSubscription = create_subscription<booster_interface::msg::LowState>("/low_state" + topic_suffix, SUB_STATE_QUEUE_SIZE, bind(&Brain::lowStateCallback, this, _1));
     headPoseSubscription = create_subscription<geometry_msgs::msg::Pose>("/head_pose" + topic_suffix, SUB_STATE_QUEUE_SIZE, bind(&Brain::headPoseCallback, this, _1));
     recoveryStateSubscription = create_subscription<booster_interface::msg::RawBytesMsg>("fall_down_recovery_state" + topic_suffix, SUB_STATE_QUEUE_SIZE, bind(&Brain::recoveryStateCallback, this, _1));
+    whistleDetectionSubscription = create_subscription<std_msgs::msg::String>("/whistle_detected", SUB_STATE_QUEUE_SIZE, bind(&Brain::whistleDetectionCallback, this, _1));
 
     imageCameraInfoSubscription = create_subscription<sensor_msgs::msg::CameraInfo>(
         config->get_image_camera_info_topic(), SUB_STATE_QUEUE_SIZE, bind(&Brain::imageCameraInfoCallback, this, _1));
@@ -337,14 +375,14 @@ void Brain::tick()
     publishBallPosition();
     publishTeammatesPoses();
     
-    // Publish kick message
-    pubKickMsg();
-    
     updateMemory();
     handleSpecialStates();
     handleCooperation();
 
     tree->tick();
+
+    // Publish kick message after special-state and behavior decisions have updated kickDir/state.
+    pubKickMsg();
 }
 
 void Brain::updateLocalFreekickPhase() {
@@ -491,6 +529,88 @@ void Brain::updateLocalFreekickPhase() {
     tree->setEntry<string>("local_freekick_phase", data->localFreekickPhase);
 }
 
+void Brain::updateFreekickKickerTouchCostPenalty() {
+    static bool paramsCached = false;
+    static double closeDist = 0.20;
+    static double releaseDist = 0.50;
+    static double penaltyMsecs = 5000.0;
+    if (!paramsCached) {
+        closeDist = get_parameter("strategy.freekick_kicker_touch.close_dist").as_double();
+        releaseDist = get_parameter("strategy.freekick_kicker_touch.release_dist").as_double();
+        penaltyMsecs = get_parameter("strategy.freekick_kicker_touch.cost_penalty_msecs").as_double();
+        paramsCached = true;
+    }
+
+    const bool enabled = get_parameter("strategy.freekick_kicker_touch.enable").as_bool();
+    if (!enabled) {
+        data->freekickKickerTouchCostPenaltyActive = false;
+        data->freekickKickerTouchArmed = false;
+        data->freekickOffenseKickerActive = false;
+        return;
+    }
+
+    auto now = get_clock()->now();
+    if (data->freekickKickerTouchCostPenaltyActive &&
+        msecsSince(data->freekickKickerTouchCostPenaltyStartTime) >= penaltyMsecs) {
+        data->freekickKickerTouchCostPenaltyActive = false;
+        data->freekickKickerTouchArmed = false;
+        data->freekickOffenseKickerActive = false;
+        log->log("debug/freekick_kicker_touch", "touch cost penalty expired");
+    }
+
+    const string gameState = tree->getEntry<string>("gc_game_state");
+    const string gameSubStateType = tree->getEntry<string>("gc_game_sub_state_type");
+    const string role = tree->getEntry<string>("player_role");
+    const bool ownFreekickExecution =
+        gameState == "PLAY"
+        && gameSubStateType == "FREE_KICK"
+        && tree->getEntry<bool>("gc_is_sub_state_kickoff_side")
+        && data->isFreekickKickingOff;
+
+    if (!ownFreekickExecution) {
+        if (!data->freekickKickerTouchCostPenaltyActive) {
+            data->freekickOffenseKickerActive = false;
+            data->freekickKickerTouchArmed = false;
+        }
+        return;
+    }
+
+    const bool iAmFreekickKicker =
+        role == "striker"
+        && (data->freekickOffenseKickerActive || data->tmMyCostRank == 0);
+
+    if (!iAmFreekickKicker || data->freekickKickerTouchCostPenaltyActive) {
+        if (!iAmFreekickKicker) {
+            data->freekickOffenseKickerActive = false;
+            data->freekickKickerTouchArmed = false;
+        }
+        return;
+    }
+
+    data->freekickOffenseKickerActive = true;
+
+    if (!data->ballDetected || !std::isfinite(data->ball.range)) {
+        data->freekickKickerTouchArmed = false;
+        return;
+    }
+
+    const double ballRange = data->ball.range;
+    if (ballRange < closeDist) {
+        data->freekickKickerTouchArmed = true;
+    } else if (data->freekickKickerTouchArmed && ballRange > releaseDist) {
+        data->freekickKickerTouchCostPenaltyActive = true;
+        data->freekickKickerTouchCostPenaltyStartTime = now;
+        data->freekickKickerTouchArmed = false;
+        data->freekickOffenseKickerActive = false;
+        log->log("debug/freekick_kicker_touch",
+                 format(
+                     "kicker touch release detected: ball_range=%.3f close=%.3f release=%.3f, start cost penalty",
+                     ballRange,
+                     closeDist,
+                     releaseDist));
+    }
+}
+
 void Brain::handleSpecialStates() {
     updateLocalFreekickPhase();
     const double KICKOFF_DURATION = 10.0;
@@ -505,6 +625,24 @@ void Brain::handleSpecialStates() {
 
     static bool lastIsKickingOffstate = false;
     static bool lastIsFreekickKickingOff = false;
+    static string lastGameSubStateType = "NONE";
+    const bool ballFreeEdge =
+        lastGameSubStateType == "FREE_KICK"
+        && gameSubStateType == "NONE"
+        && gameState == "PLAY";
+    if (ballFreeEdge) {
+        tree->setEntry<bool>("local_freekick_target_valid", false);
+        tree->setEntry<double>("local_freekick_target_error", 999.0);
+        tree->setEntry<bool>("local_freekick_move_stable", false);
+        tree->setEntry<bool>("wait_for_opponent_kickoff", false);
+        data->waitForOpponentKickoffByFreekick = false;
+        data->isFreekickKickingOff = false;
+        data->isDirectShoot = false;
+        lastIsFreekickKickingOff = false;
+        client->setVelocity(0, 0, 0);
+    }
+    lastGameSubStateType = gameSubStateType;
+
     // 正常发球
     if (gameState == "SET" && isKickoffSide) {
         data->isKickingOff = true;
@@ -564,6 +702,8 @@ void Brain::handleSpecialStates() {
     if (gameState == "SET") {
         tree->setEntry<bool>("we_just_scored", false);
     }
+
+    updateFreekickKickerTouchCostPenalty();
 }
 
 void Brain::handleCooperation() {
@@ -880,6 +1020,13 @@ void Brain::updateKickoffMemory() {
     const double FILTER_ALPHA = 0.2;
     const double MAX_JUMP_DISTANCE = 1.0;
     const double TIMEOUT = 1000 * 10;
+    // Whistle-aware opponent-kickoff release tuning (ported from blueteam).
+    // The non-whistle path keeps 2026gc's existing BALL_MOVE_THRESHOLD_FACTOR (0.15);
+    // these constants only affect the whistle-pending opponent-kickoff release.
+    const double OPPONENT_KICKOFF_WHISTLE_MOVE_FACTOR = 100.0;
+    const double OPPONENT_KICKOFF_WHISTLE_MOVE_MIN = 0.3;
+    const int OPPONENT_KICKOFF_EXIT_AFTER_INSIDE_THRESHOLD = 2;
+    const int OPPONENT_KICKOFF_OUTSIDE_ANY_THRESHOLD = 3;
 
     auto ballMoved = [this, BALL_MOVE_THRESHOLD_FACTOR, BALL_MOVE_THRESHOLD_MIN, CONSECUTIVE_MOVE_THRESHOLD, FILTER_ALPHA, MAX_JUMP_DISTANCE]() {
         if (!data->ballDetected) {
@@ -920,15 +1067,160 @@ void Brain::updateKickoffMemory() {
         return msecsSince(kickOffTime) > TIMEOUT;
     };
 
-    bool isWaitingForKickoff = (
-        (tree->getEntry<string>("gc_game_state") == "SET" || tree->getEntry<string>("gc_game_state") == "READY")
-        && !tree->getEntry<bool>("gc_is_kickoff_side")
-    );
+    auto resetOpponentKickoffLocalReleaseObservation = [this]() {
+        data->opponentKickoffWhistleBallInitialized = false;
+        data->opponentKickoffWhistleSawBallInsideCenter = false;
+        data->opponentKickoffWhistleMoveCount = 0;
+        data->opponentKickoffWhistleOutsideAfterInsideCount = 0;
+        data->opponentKickoffWhistleOutsideAnyCount = 0;
+        data->opponentKickoffWhistleBallPosToRobot = {0.0, 0.0, 0.0};
+        data->opponentKickoffWhistleFilteredBallPosToRobot = {0.0, 0.0, 0.0};
+    };
+
+    // Whistle-aware ball-move detection for the opponent-kickoff wait.
+    // When whistlePending it uses the whistle thresholds; otherwise it falls back
+    // to 2026gc's existing BALL_MOVE_THRESHOLD_* values.
+    auto opponentKickoffBallMoved = [
+        this,
+        BALL_MOVE_THRESHOLD_FACTOR,
+        BALL_MOVE_THRESHOLD_MIN,
+        OPPONENT_KICKOFF_WHISTLE_MOVE_FACTOR,
+        OPPONENT_KICKOFF_WHISTLE_MOVE_MIN,
+        CONSECUTIVE_MOVE_THRESHOLD,
+        FILTER_ALPHA,
+        MAX_JUMP_DISTANCE
+    ](bool whistlePending) {
+        if (!data->ballDetected) {
+            return false;
+        }
+
+        Point currentBallPos = data->ball.posToRobot;
+        if (!data->opponentKickoffWhistleBallInitialized) {
+            data->opponentKickoffWhistleBallPosToRobot = currentBallPos;
+            data->opponentKickoffWhistleFilteredBallPosToRobot = currentBallPos;
+            data->opponentKickoffWhistleBallInitialized = true;
+            data->opponentKickoffWhistleMoveCount = 0;
+            return false;
+        } else {
+            double jumpDistance = norm(
+                currentBallPos.x - data->opponentKickoffWhistleFilteredBallPosToRobot.x,
+                currentBallPos.y - data->opponentKickoffWhistleFilteredBallPosToRobot.y
+            );
+            if (jumpDistance <= MAX_JUMP_DISTANCE) {
+                data->opponentKickoffWhistleFilteredBallPosToRobot.x =
+                    FILTER_ALPHA * currentBallPos.x + (1.0 - FILTER_ALPHA) * data->opponentKickoffWhistleFilteredBallPosToRobot.x;
+                data->opponentKickoffWhistleFilteredBallPosToRobot.y =
+                    FILTER_ALPHA * currentBallPos.y + (1.0 - FILTER_ALPHA) * data->opponentKickoffWhistleFilteredBallPosToRobot.y;
+            }
+        }
+
+        const double moveFactor = whistlePending ? OPPONENT_KICKOFF_WHISTLE_MOVE_FACTOR : BALL_MOVE_THRESHOLD_FACTOR;
+        const double moveMin = whistlePending ? OPPONENT_KICKOFF_WHISTLE_MOVE_MIN : BALL_MOVE_THRESHOLD_MIN;
+        double threshold = max(data->ball.range * moveFactor, moveMin);
+        double posChange = norm(
+            data->opponentKickoffWhistleFilteredBallPosToRobot.x - data->opponentKickoffWhistleBallPosToRobot.x,
+            data->opponentKickoffWhistleFilteredBallPosToRobot.y - data->opponentKickoffWhistleBallPosToRobot.y);
+
+        if (posChange > threshold) {
+            data->opponentKickoffWhistleMoveCount++;
+        } else {
+            data->opponentKickoffWhistleMoveCount = 0;
+        }
+
+        return data->opponentKickoffWhistleMoveCount >= CONSECUTIVE_MOVE_THRESHOLD;
+    };
+
+    auto opponentKickoffBallExitedCenterCircle = [
+        this,
+        OPPONENT_KICKOFF_EXIT_AFTER_INSIDE_THRESHOLD,
+        OPPONENT_KICKOFF_OUTSIDE_ANY_THRESHOLD
+    ](bool whistlePending) {
+        (void)whistlePending;
+        const double circleRadius = max(0.0, config->fieldDimensions.circleRadius + 100.0);
+        if (!data->ballDetected) {
+            return false;
+        }
+
+        const double centerDist = norm(data->ball.posToField.x, data->ball.posToField.y);
+        const bool insideCenterCircle = centerDist <= circleRadius;
+        if (insideCenterCircle) {
+            data->opponentKickoffWhistleSawBallInsideCenter = true;
+            data->opponentKickoffWhistleOutsideAfterInsideCount = 0;
+            data->opponentKickoffWhistleOutsideAnyCount = 0;
+            return false;
+        }
+
+        data->opponentKickoffWhistleOutsideAnyCount++;
+        if (data->opponentKickoffWhistleSawBallInsideCenter) {
+            data->opponentKickoffWhistleOutsideAfterInsideCount++;
+        } else {
+            data->opponentKickoffWhistleOutsideAfterInsideCount = 0;
+        }
+
+        const bool exitedAfterInside =
+            data->opponentKickoffWhistleSawBallInsideCenter
+            && data->opponentKickoffWhistleOutsideAfterInsideCount >= OPPONENT_KICKOFF_EXIT_AFTER_INSIDE_THRESHOLD;
+        const bool stableOutsideAny =
+            data->opponentKickoffWhistleOutsideAnyCount >= OPPONENT_KICKOFF_OUTSIDE_ANY_THRESHOLD;
+
+        return exitedAfterInside || stableOutsideAny;
+    };
+
+    auto opponentWhistleTimedOut = [this, TIMEOUT]() {
+        return data->opponentKickoffWhistlePending
+            && msecsSince(data->opponentKickoffWhistleTime) > TIMEOUT;
+    };
+
+    string gameState = tree->getEntry<string>("gc_game_state");
+    string gameSubStateType = tree->getEntry<string>("gc_game_sub_state_type");
+    bool isKickoffSide = tree->getEntry<bool>("gc_is_kickoff_side");
+    bool isSubStateKickoffSide = tree->getEntry<bool>("gc_is_sub_state_kickoff_side");
+    const bool isOrdinaryOpponentKickoffSet =
+        gameState == "SET" && gameSubStateType == "NONE" && !isKickoffSide;
+    const bool isOrdinaryOpponentKickoffReady =
+        gameState == "READY" && gameSubStateType == "NONE" && !isKickoffSide;
+
+    if (data->opponentKickoffWhistlePending && !isOrdinaryOpponentKickoffSet) {
+        resetOpponentKickoffWhistleState("left_opponent_kickoff_set", true);
+    }
+    if (!isOrdinaryOpponentKickoffSet) {
+        resetOpponentKickoffLocalReleaseObservation();
+    }
+
+    bool isWaitingForKickoff = (isOrdinaryOpponentKickoffSet || isOrdinaryOpponentKickoffReady);
     bool isWaitingForFreekickKickoff = (
         (tree->getEntry<string>("gc_game_sub_state") == "SET" || tree->getEntry<string>("gc_game_sub_state") == "GET_READY")
-        && !tree->getEntry<bool>("gc_is_sub_state_kickoff_side")
+        && !isSubStateKickoffSide
     );
-    if (isWaitingForFreekickKickoff || isWaitingForKickoff) {
+
+    if (isOrdinaryOpponentKickoffSet) {
+        // Ordinary opponent kickoff in SET: keep waiting, release on (whistle-aware)
+        // ball movement, ball leaving the center circle, or whistle timeout.
+        tree->setEntry<bool>("wait_for_opponent_kickoff", true);
+        data->waitForOpponentKickoffByFreekick = false;
+
+        const bool whistlePending = data->opponentKickoffWhistlePending;
+        const bool moved = opponentKickoffBallMoved(whistlePending);
+        const bool exitedCenterCircle = opponentKickoffBallExitedCenterCircle(whistlePending);
+        const bool timedOut = whistlePending && opponentWhistleTimedOut();
+        if (moved || exitedCenterCircle || timedOut) {
+            releaseOpponentKickoffWait(
+                moved
+                    ? (whistlePending ? "ball_moved_after_whistle" : "ball_moved_without_whistle")
+                    : exitedCenterCircle ? "ball_stably_outside_center_circle" : "whistle_timeout",
+                format("whistle_pending=%d age_ms=%.1f move_count=%d saw_inside_center=%d outside_after_inside_count=%d outside_any_count=%d ball_detected=%d",
+                    whistlePending ? 1 : 0,
+                    whistlePending ? msecsSince(data->opponentKickoffWhistleTime) : -1.0,
+                    data->opponentKickoffWhistleMoveCount,
+                    data->opponentKickoffWhistleSawBallInsideCenter ? 1 : 0,
+                    data->opponentKickoffWhistleOutsideAfterInsideCount,
+                    data->opponentKickoffWhistleOutsideAnyCount,
+                    data->ballDetected ? 1 : 0),
+                true,
+                true);
+            return;
+        }
+    } else if (isWaitingForFreekickKickoff || isWaitingForKickoff) {
         ballPos = data->ball.posToRobot;
         filteredBallPos = data->ball.posToRobot;
         filteredBallPosInitialized = true;
@@ -951,9 +1243,6 @@ void Brain::updateKickoffMemory() {
 
         bool moved = ballMoved();
         if (moved || timeReached()) {
-            if (moved) {
-                double threshold = max(data->ball.range * BALL_MOVE_THRESHOLD_FACTOR, BALL_MOVE_THRESHOLD_MIN);
-            }
             consecutiveMoveCount = 0;
             filteredBallPosInitialized = false;
             tree->setEntry<bool>("wait_for_opponent_kickoff", false);
@@ -1089,7 +1378,31 @@ void Brain::updateCostToKick() {
     // smoothing
     double lastCost = data->tmMyCost;
     data->tmMyCost = lastCost * 0.8 + cost * 0.2;
-    log_(format("lastCost: %.1f, newCost: %.1f, smoothCost: %.1f", lastCost, cost, data->tmMyCost));
+
+    static bool freekickTouchParamsCached = false;
+    static bool freekickTouchEnabled = true;
+    static double freekickTouchCostPenalty = 100.0;
+    static double freekickTouchPenaltyMsecs = 5000.0;
+    if (!freekickTouchParamsCached) {
+        freekickTouchEnabled = get_parameter("strategy.freekick_kicker_touch.enable").as_bool();
+        freekickTouchCostPenalty = get_parameter("strategy.freekick_kicker_touch.cost_penalty").as_double();
+        freekickTouchPenaltyMsecs = get_parameter("strategy.freekick_kicker_touch.cost_penalty_msecs").as_double();
+        freekickTouchParamsCached = true;
+    }
+    freekickTouchEnabled = get_parameter("strategy.freekick_kicker_touch.enable").as_bool();
+    if (!freekickTouchEnabled) {
+        data->freekickKickerTouchCostPenaltyActive = false;
+        data->freekickKickerTouchArmed = false;
+    } else if (data->freekickKickerTouchCostPenaltyActive) {
+        if (msecsSince(data->freekickKickerTouchCostPenaltyStartTime) < freekickTouchPenaltyMsecs) {
+            data->tmMyCost += freekickTouchCostPenalty;
+            log_(format("freekick kicker touch penalty cost: %.1f", freekickTouchCostPenalty));
+        } else {
+            data->freekickKickerTouchCostPenaltyActive = false;
+            data->freekickKickerTouchArmed = false;
+        }
+    }
+    log_(format("lastCost: %.1f, newCost: %.1f, finalCost: %.1f", lastCost, cost, data->tmMyCost));
 
     return;
 }
@@ -1257,7 +1570,20 @@ void Brain::pubKickMsg() {
     dist = std::abs(dist);
     double power = 0.0;
 
-    if (dist > 6.0) {
+    if (data->isFreekickKickingOff && !data->isDirectShoot) {
+        // Indirect free kicks / corner kicks / throw-ins must be opened as a pass.
+        power = config->get_rl_vision_kick_high_pass_power();
+        if (ball_x > 0.0) {
+            goal_x = ball_x;
+            goal_y = 0.0;
+            goalPose.x = goal_x;
+            goalPose.y = goal_y;
+            double targetTheta = atan2(goal_y - data->robotPoseToField.y, goal_x - data->robotPoseToField.x);
+            kickMsg.dir = toPInPI(targetTheta - data->robotPoseToField.theta);
+        }
+    } else if (data->isKickingOff) {
+        power = config->get_rl_vision_kick_low_pass_power();
+    } else if (dist > 6.0) {
         power = 1.5;
     } else {
         power = 6.0;
@@ -1346,6 +1672,142 @@ void Brain::joystickCallback(const booster_interface::msg::RemoteControllerState
     }
 }
 
+void Brain::resetOpponentKickoffWhistleState(const string &reason, bool clearLocalPlayOverride)
+{
+    const bool hadState =
+        data->opponentKickoffWhistlePending
+        || data->opponentKickoffWhistleBallInitialized
+        || data->opponentKickoffWhistleSawBallInsideCenter
+        || data->opponentKickoffWhistleMoveCount > 0
+        || data->opponentKickoffWhistleOutsideAfterInsideCount > 0
+        || data->opponentKickoffWhistleOutsideAnyCount > 0
+        || (clearLocalPlayOverride && data->opponentKickoffLocalPlayOverride);
+
+    if (hadState) {
+        log->log("debug/opponent_kickoff_release", format(
+            "reset opponent kickoff whistle state: reason=%s pending=%d move_count=%d outside_after_inside_count=%d outside_any_count=%d saw_inside_center=%d local_override=%d",
+            reason.c_str(),
+            data->opponentKickoffWhistlePending ? 1 : 0,
+            data->opponentKickoffWhistleMoveCount,
+            data->opponentKickoffWhistleOutsideAfterInsideCount,
+            data->opponentKickoffWhistleOutsideAnyCount,
+            data->opponentKickoffWhistleSawBallInsideCenter ? 1 : 0,
+            data->opponentKickoffLocalPlayOverride ? 1 : 0));
+    }
+
+    data->opponentKickoffWhistlePending = false;
+    data->opponentKickoffWhistleBallInitialized = false;
+    data->opponentKickoffWhistleSawBallInsideCenter = false;
+    data->opponentKickoffWhistleMoveCount = 0;
+    data->opponentKickoffWhistleOutsideAfterInsideCount = 0;
+    data->opponentKickoffWhistleOutsideAnyCount = 0;
+    data->opponentKickoffWhistleBallPosToRobot = {0.0, 0.0, 0.0};
+    data->opponentKickoffWhistleFilteredBallPosToRobot = {0.0, 0.0, 0.0};
+    if (clearLocalPlayOverride) {
+        data->opponentKickoffLocalPlayOverride = false;
+    }
+}
+
+void Brain::releaseOpponentKickoffWait(const string &reason, const string &detail, bool switchToPlay, bool keepLocalPlayOverride)
+{
+    const bool wasWaiting = tree->getEntry<bool>("wait_for_opponent_kickoff");
+    const bool hadPending = data->opponentKickoffWhistlePending;
+
+    tree->setEntry<bool>("wait_for_opponent_kickoff", false);
+    data->waitForOpponentKickoffByFreekick = false;
+    data->opponentKickoffWhistlePending = false;
+    data->opponentKickoffWhistleBallInitialized = false;
+    data->opponentKickoffWhistleSawBallInsideCenter = false;
+    data->opponentKickoffWhistleMoveCount = 0;
+    data->opponentKickoffWhistleOutsideAfterInsideCount = 0;
+    data->opponentKickoffWhistleOutsideAnyCount = 0;
+    data->opponentKickoffWhistleBallPosToRobot = {0.0, 0.0, 0.0};
+    data->opponentKickoffWhistleFilteredBallPosToRobot = {0.0, 0.0, 0.0};
+    data->whistleTriggeredPlay = false;
+
+    if (switchToPlay) {
+        tree->setEntry<string>("gc_game_state", "PLAY");
+    }
+    data->opponentKickoffLocalPlayOverride = keepLocalPlayOverride;
+    if (keepLocalPlayOverride) {
+        data->opponentKickoffLocalPlayOverrideTime = get_clock()->now();
+    }
+
+    log->log("debug/opponent_kickoff_release", format(
+        "release opponent kickoff wait: reason=%s detail=%s switch_to_play=%d keep_local_override=%d was_waiting=%d had_pending=%d ball_detected=%d game_state=%s",
+        reason.c_str(),
+        detail.c_str(),
+        switchToPlay ? 1 : 0,
+        keepLocalPlayOverride ? 1 : 0,
+        wasWaiting ? 1 : 0,
+        hadPending ? 1 : 0,
+        data->ballDetected ? 1 : 0,
+        tree->getEntry<string>("gc_game_state").c_str()));
+}
+
+void Brain::whistleDetectionCallback(const std_msgs::msg::String &msg)
+{
+    if (msg.data != "whistle_detected") {
+        return;
+    }
+
+    string gameState = tree->getEntry<string>("gc_game_state");
+    string gameSubStateType = tree->getEntry<string>("gc_game_sub_state_type");
+    bool isKickoffSide = tree->getEntry<bool>("gc_is_kickoff_side");
+    bool isSubStateKickoffSide = tree->getEntry<bool>("gc_is_sub_state_kickoff_side");
+
+    if (gameState == "SET") {
+        if (isKickoffSide) {
+            // We are the kicking side: keep old behavior and switch to PLAY immediately.
+            tree->setEntry<string>("gc_game_state", "PLAY");
+            data->whistleTriggeredPlay = true;
+            data->whistleDetectedTime = get_clock()->now();
+            resetOpponentKickoffWhistleState("our_kickoff_whistle_play", true);
+            RCLCPP_INFO(get_logger(), "Whistle detected in SET state, switching to PLAY for kickoff (we are kicking side)");
+        } else if (gameSubStateType == "NONE") {
+            // Opponent kickoff: keep SET and wait for a local release condition (ball moves / timeout).
+            if (!data->opponentKickoffWhistlePending) {
+                const double opponentKickoffCircleRadius = max(0.0, config->fieldDimensions.circleRadius - 0.5);
+                const bool ballInsideCenter =
+                    data->ballDetected
+                    && norm(data->ball.posToField.x, data->ball.posToField.y) <= opponentKickoffCircleRadius;
+                data->opponentKickoffWhistlePending = true;
+                data->opponentKickoffWhistleTime = get_clock()->now();
+                if (!data->opponentKickoffWhistleBallInitialized && data->ballDetected) {
+                    data->opponentKickoffWhistleBallPosToRobot = data->ball.posToRobot;
+                    data->opponentKickoffWhistleFilteredBallPosToRobot = data->ball.posToRobot;
+                }
+                if (ballInsideCenter) {
+                    data->opponentKickoffWhistleSawBallInsideCenter = true;
+                    data->opponentKickoffWhistleOutsideAfterInsideCount = 0;
+                    data->opponentKickoffWhistleOutsideAnyCount = 0;
+                }
+                data->opponentKickoffLocalPlayOverride = false;
+                data->whistleTriggeredPlay = false;
+                tree->setEntry<bool>("wait_for_opponent_kickoff", true);
+                log->log("debug/opponent_kickoff_release", format(
+                    "whistle in ordinary SET: opponent kickoff side, keep SET and wait local release; ball_detected=%d inside_center=%d circle_radius=%.3f",
+                    data->ballDetected ? 1 : 0,
+                    ballInsideCenter ? 1 : 0,
+                    opponentKickoffCircleRadius));
+            }
+            RCLCPP_INFO(get_logger(), "Whistle detected in SET state for opponent kickoff; keeping SET until ball release or timeout");
+        }
+    } else if (gameState == "PLAY" && gameSubStateType == "FREE_KICK" && isSubStateKickoffSide) {
+        // NOTE: 2026gc's GC v19 sub-state model only emits STOP/GET_READY (never "SET"),
+        // so this branch is currently inert; kept for fidelity with blueteam and forward
+        // compatibility if a "SET" sub-state is ever produced.
+        string gameSubState = tree->getEntry<string>("gc_game_sub_state");
+        if (gameSubState == "SET") {
+            tree->setEntry<string>("gc_game_sub_state", "NONE");
+            data->whistleTriggeredPlay = true;
+            data->whistleDetectedTime = get_clock()->now();
+            resetOpponentKickoffWhistleState("our_freekick_whistle_play", true);
+            RCLCPP_INFO(get_logger(), "Whistle detected in FREE_KICK SET state, switching to normal PLAY");
+        }
+    }
+}
+
 void Brain::gameControlCallback(const game_controller_interface::msg::GameControlData &msg)
 {
     data->timeLastGamecontrolMsg = get_clock()->now();
@@ -1360,10 +1822,54 @@ void Brain::gameControlCallback(const game_controller_interface::msg::GameContro
         "END"      // 比赛结束
     };
     string gameState = gameStateMap[static_cast<int>(msg.state)];
-    tree->setEntry<string>("gc_game_state", gameState);
     const int teamId = config->get_team_id();
     const int playerId = config->get_player_id();
     bool isKickOffSide = (static_cast<int>(msg.kicking_team) == teamId); // 我方是否是开球方
+
+    // === 哨声 / 本地开球 PLAY 覆盖保护 (配合 whistleDetectionCallback) ===
+    // 默认 GC 每个包都会无条件覆盖 gc_game_state, 这会把哨声本地设置的 PLAY 立刻拉回 SET,
+    // 因此这里在哨声触发后短时间内保护本地 PLAY 状态。仅当哨声状态位有效时介入, 不影响正常流程。
+    const int rawGameState = static_cast<int>(msg.state); // 2: SET, 3: PLAY
+    const int rawSetPlay = static_cast<int>(msg.set_play); // 0: NONE
+    // 当 GC 真正下发 PLAY 时, 释放仍在等待对方开球的状态/override。
+    if (rawGameState == 3 && rawSetPlay == 0 && !isKickOffSide
+        && (tree->getEntry<bool>("wait_for_opponent_kickoff")
+            || data->opponentKickoffWhistlePending
+            || data->opponentKickoffLocalPlayOverride)) {
+        releaseOpponentKickoffWait(
+            "gc_play",
+            format("raw_state=%d set_play=%d is_kickoff_side=%d", rawGameState, rawSetPlay, isKickOffSide ? 1 : 0),
+            false,
+            false);
+    }
+    // 本地 override: 对方开球 SET 阶段保持本地判定的 PLAY, 不被 GC 的 SET 拉回。
+    if (data->opponentKickoffLocalPlayOverride) {
+        if (rawGameState != 2 /* not SET */ || rawSetPlay != 0 || isKickOffSide) {
+            resetOpponentKickoffWhistleState("local_play_override_finished", true);
+        } else if (gameState != "PLAY") {
+            gameState = "PLAY";
+        }
+    }
+    // 哨声保护: 我方开球哨声触发 PLAY 后, 12 秒内不允许 GC 把状态切回非 PLAY。
+    const bool allowWhistleStateProtection = data->whistleTriggeredPlay && isKickOffSide;
+    if (allowWhistleStateProtection) {
+        auto timeSinceWhistle = (get_clock()->now() - data->whistleDetectedTime).seconds();
+        if (timeSinceWhistle < 12.0) {
+            if (tree->getEntry<string>("gc_game_state") == "PLAY" && gameState != "PLAY") {
+                RCLCPP_WARN(get_logger(), "Whistle protection active (%.1fs): ignoring state change to %s", timeSinceWhistle, gameState.c_str());
+                gameState = "PLAY";
+            }
+        } else {
+            data->whistleTriggeredPlay = false;
+        }
+    } else if (data->whistleTriggeredPlay) {
+        data->whistleTriggeredPlay = false;
+    }
+
+    tree->setEntry<string>("gc_game_state", gameState);
+    if (gameState != "PLAY") {
+        data->whistleTriggeredPlay = false;
+    }
     tree->setEntry<bool>("gc_is_kickoff_side", isKickOffSide);
 
     // 处理比赛的二级状态
@@ -1426,10 +1932,36 @@ void Brain::gameControlCallback(const game_controller_interface::msg::GameContro
             gameSubState = "GET_READY";
         }
     }
+    bool isSubStateKickOffSide = (gameSubStateType == "FREE_KICK") && (static_cast<int>(msg.kicking_team) == teamId); // 在二级状态下, 我方是否是开球方. 例如, 当前二级状态为任意球, 我方是否是开任意球的一方
+
+    // === 哨声任意球二级状态保护 (配合 whistleDetectionCallback 的 FREE_KICK 分支) ===
+    // 我方任意球哨声触发后, 15 秒内保持本地二级状态, 不被 GC 覆盖。
+    // 注: 2026gc 的 GC v19 二级状态模型不产生 FREE_KICK "SET" 档, 该分支通常不会触发,
+    // 仅为与 blueteam 完全对齐而保留。
+    if (data->whistleTriggeredPlay
+        && gameState == "PLAY"
+        && gameSubStateType == "FREE_KICK"
+        && isSubStateKickOffSide
+        && tree->getEntry<string>("gc_game_sub_state_type") == "FREE_KICK") {
+        auto timeSinceWhistle = (get_clock()->now() - data->whistleDetectedTime).seconds();
+        if (timeSinceWhistle < 15.0) {
+            auto currentGameSubStateType = tree->getEntry<string>("gc_game_sub_state_type");
+            auto currentGameSubState = tree->getEntry<string>("gc_game_sub_state");
+            if (gameSubStateType != currentGameSubStateType || gameSubState != currentGameSubState) {
+                RCLCPP_WARN(get_logger(), "Whistle protection active: maintaining sub-state %s/%s (not switching to %s/%s)",
+                            currentGameSubStateType.c_str(), currentGameSubState.c_str(),
+                            gameSubStateType.c_str(), gameSubState.c_str());
+                gameSubStateType = currentGameSubStateType;
+                gameSubState = currentGameSubState;
+                isSubStateKickOffSide = tree->getEntry<bool>("gc_is_sub_state_kickoff_side");
+            }
+        }
+    }
+
     tree->setEntry<string>("gc_game_sub_state_type", gameSubStateType);
     tree->setEntry<string>("gc_game_sub_state", gameSubState);
-    bool isSubStateKickOffSide = (gameSubStateType == "FREE_KICK") && (static_cast<int>(msg.kicking_team) == teamId); // 在二级状态下, 我方是否是开球方. 例如, 当前二级状态为任意球, 我方是否是开任意球的一方
     tree->setEntry<bool>("gc_is_sub_state_kickoff_side", isSubStateKickOffSide);
+    tree->setEntry<string>("gc_real_game_sub_state", data->realGameSubState);
 
     // cout << "game state: " << gameState << " game sub state type: " << gameSubStateType << endl;
     // 找到队的信息

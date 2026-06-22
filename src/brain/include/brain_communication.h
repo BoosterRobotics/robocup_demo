@@ -49,6 +49,7 @@ private:
     int _team_udp_port = 0;
     sockaddr_in _team_saddr;
     static constexpr int BROADCAST_TEAM_INTERVAL_MS = 500; // 2 packets per second (complies with rules)
+    int _team_broadcast_interval_ms = BROADCAST_TEAM_INTERVAL_MS; // 实际广播间隔, 由 team_comm_frequency_hz 配置算出
     int _team_communication_msg_id = 0;
     int _counted_messages = 0; // 仅在 READY/SET/PLAY 状态计数的消息数量
 

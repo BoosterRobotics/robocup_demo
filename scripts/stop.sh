@@ -7,3 +7,5 @@ echo ["STOP BRAIN"]
 pkill -9 brain_node
 echo ["STOP GAMECONTROLLER"]
 ps aux | grep "game_controller" | grep -v "game_controller_app" | grep -v "grep" | awk '{print $2}' | xargs -r kill -9
+echo ["STOP whistle"]
+pkill -9 whistle

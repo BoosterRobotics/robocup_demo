@@ -13,8 +13,8 @@
          <ReactiveSequence _while="!gc_is_sub_state_kickoff_side" name="move to defending freekick position">
             <CamTrackBall _while="ball_location_known" />
             <CalcKickDir />
-            <SubTree ID="FindBall" _while="!(ball_location_known || tm_ball_pos_reliable)" _autoremap="true" />
-            <GoToFreekickPosition _while="ball_location_known || tm_ball_pos_reliable" side="defense" />
+            <SubTree ID="FindBall" _while="!(ball_location_known || tm_ball_pos_reliable) &amp;&amp; !(gc_real_game_sub_state=='GOAL_KICK' &amp;&amp; !gc_is_sub_state_kickoff_side)" _autoremap="true" />
+            <GoToFreekickPosition _while="ball_location_known || tm_ball_pos_reliable || (gc_real_game_sub_state=='GOAL_KICK' &amp;&amp; !gc_is_sub_state_kickoff_side)" side="defense" />
          </ReactiveSequence>
       </ReactiveSequence>
    </BehaviorTree>

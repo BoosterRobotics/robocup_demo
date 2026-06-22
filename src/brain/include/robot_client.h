@@ -112,6 +112,11 @@ public:
      int robocupWalk();
 
     /**
+     * @brief Switch robocup mode (kSoccer) and exit VisualKick(false)
+     */
+    int changeRobocupMode();
+
+    /**
      * @brief Enter damping mode
      */
     int enterDamping();

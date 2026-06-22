@@ -125,6 +125,21 @@ void BrainCommunication::initTeamBroadcast()
         _team_saddr.sin_addr.s_addr = INADDR_BROADCAST;  // 255.255.255.255
         _team_saddr.sin_port = htons(_team_udp_port);
 
+        // 由配置计算队内广播间隔（默认 2Hz = 500ms）
+        double hz = brain->config->get_team_comm_frequency_hz();
+        if (hz <= 0.0) {
+            cout << RED_CODE << format("team_comm_frequency_hz=%.2f <= 0, fallback to 2.0Hz", hz)
+                << RESET_CODE << endl;
+            hz = 2.0;
+        }
+        if (hz > 2.0) {
+            cout << RED_CODE << format("team_comm_frequency_hz=%.2f exceeds RoboCup 2 packets/sec rule! (still applied)", hz)
+                << RESET_CODE << endl;
+        }
+        _team_broadcast_interval_ms = static_cast<int>(1000.0 / hz + 0.5);
+        cout << GREEN_CODE << format("Team broadcast frequency: %.2f Hz (interval %d ms)", hz, _team_broadcast_interval_ms)
+            << RESET_CODE << endl;
+
         _broadcast_team_flag = true;
         _team_broadcast_thread = std::thread([this](){ this->broadcastTeamCommunication(); });
         
@@ -219,8 +234,8 @@ void BrainCommunication::broadcastTeamCommunication() {
             }
         }
         
-        this_thread::sleep_for(chrono::milliseconds(BROADCAST_TEAM_INTERVAL_MS)); // 500ms = 2 packets per second
-    } 
+        this_thread::sleep_for(chrono::milliseconds(_team_broadcast_interval_ms)); // 由 team_comm_frequency_hz 配置, 默认 500ms = 2 包/秒
+    }
 }
 
 void BrainCommunication::initTeamReceiver() {
