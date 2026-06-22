@@ -106,7 +106,7 @@ brain_node:
       max_residual: 0.35
 
     enable_com: true
-    team_comm_frequency_hz: 2.0  # 队内通信广播频率(Hz)，默认 2Hz；RoboCup 规则上限 2 包/秒，超过会告警但仍生效
+    team_comm_frequency_hz: 1.0  # 队内通信广播频率(Hz)，默认 2Hz；RoboCup 规则上限 2 包/秒，超过会告警但仍生效
     
     recovery:
       retry_max_count: 2

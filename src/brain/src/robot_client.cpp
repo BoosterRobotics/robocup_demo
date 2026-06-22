@@ -92,7 +92,7 @@ int RobotClient::waveHand(bool doWaveHand)
     return call(booster_interface::CreateWaveHandMsg(booster::robot::b1::HandIndex::kRightHand, doWaveHand ? booster::robot::b1::HandAction::kHandOpen : booster::robot::b1::HandAction::kHandClose));
 }
 
-int RobotClient::setVelocity(double x, double y, double theta)
+int RobotClient::setVelocity(double x, double y, double theta, bool applyMinX, bool applyMinY, bool applyMinTheta)
 {
     brain->log->log("RobotClient/setVelocity_in",
                     format("vx: %.2f  vy: %.2f  vtheta: %.2f", x, y, theta));
@@ -100,11 +100,11 @@ int RobotClient::setVelocity(double x, double y, double theta)
     double minx = brain->config->get_min_vx();
     double miny = brain->config->get_min_vy();
     double mintheta =  brain->config->get_min_vtheta();
-    if (fabs(x) < minx && fabs(x) > 1e-5)
+    if (applyMinX && fabs(x) < minx && fabs(x) > 1e-5)
         x = x > 0 ? minx : -minx;
-    if (fabs(y) < miny && fabs(y) > 1e-5)
+    if (applyMinY && fabs(y) < miny && fabs(y) > 1e-5)
         y = y > 0 ? miny : -miny;
-    if (fabs(theta) < mintheta && fabs(theta) > 1e-5)
+    if (applyMinTheta && fabs(theta) < mintheta && fabs(theta) > 1e-5)
         theta = theta > 0 ? mintheta : -mintheta;
     x = cap(x, brain->config->get_vx_limit(), -brain->config->get_vx_limit());
     y = cap(y, brain->config->get_vy_limit(), -brain->config->get_vy_limit());

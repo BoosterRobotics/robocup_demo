@@ -44,7 +44,7 @@ public:
     * @return int , 0 indicates success
      * 
     */
-    int setVelocity(double x, double y, double theta);
+    int setVelocity(double x, double y, double theta, bool applyMinX = true, bool applyMinY = true, bool applyMinTheta = true);
 
     int crabWalk(double angle, double speed);
 

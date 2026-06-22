@@ -1,7 +1,7 @@
 # Booster RoboCup Demo
 
 ## NOTICE
-The latest RoboCup rules do not allow unicast communication between robots and impose limits on the data size of communication packets during matches. This part of the rules has not yet been addressed in the current open‑source code. If robot communication is required in the competition, the implementation in brain_communication.cpp needs to be modified to comply with the rules.
+Before each match, use the remote controller to press `LT + A` to switch the robot to `kSoccer` mode and complete pre-match localization. After localization succeeds, press `LT + B` to hand control over to the GameController.
 
 ## introduction
 The Booster RoboCup demo allows the robot to make autonomous decisions to kick the ball and complete the full RoboCup match. It includes three programs: vision, brain, and game_controller.
@@ -48,9 +48,9 @@ This demo is designed for running on Booster K1, if you'd like to run this demo 
 ### About config: RLVisionKick.enableAutoVisualKick
 ```yaml
 RLVisionKick
-    enableAutoVisualKick: true // This feature is only supported on the Booster K1, requiring firmware version 1.5.2 or higher.
+    enableAutoVisualKick: true // This feature is only supported on the Booster K1, requiring firmware version 1.6.2 or higher.
 ```
-VisionKick is only support on K1 and requiring firmware version 1.5.2 or higher. See [Firmware 1.5.2 Install Reference](https://booster.feishu.cn/wiki/E3q5wF5SnitXZgkY18Uc8odBnXb#share-BYaDdL4nAoPfdcx2y3BcwORyndf) for install instruction.
+VisionKick is only support on K1 and requiring firmware version 1.6.1 or higher. See [Firmware 1.6.2 Install Reference](https://booster.feishu.cn/wiki/E3q5wF5SnitXZgkY18Uc8odBnXb#share-BYaDdL4nAoPfdcx2y3BcwORyndf) for install instruction.
 
 Please make sure you have installed latest Booster Robotics SDK.
 
@@ -108,4 +108,3 @@ Then run build_no_cuda.sh.
 ```bash
 ./scripts/start.sh
 ```
-

@@ -880,7 +880,7 @@ NodeStatus GoToFreekickPosition::onRunning() {
         };
 
         if (brain->tree->getEntry<bool>("local_freekick_released_by_ball")) {
-            brain->client->setVelocity(0, 0, 0);
+            brain->client->setVelocity(0, 0, 0, false, false, false);
             brain->tree->setEntry<bool>("local_freekick_plan_valid", false);
             brain->tree->setEntry<string>("local_freekick_plan_stage", "released_by_ball");
             brain->tree->setEntry<int>("local_freekick_plan_count", 0);
@@ -1663,7 +1663,7 @@ NodeStatus GoToFreekickPosition::onRunning() {
                 scaleVelocityToCaps();
             }
             vtheta = cap(vtheta, 1.5, -1.5);
-            brain->client->setVelocity(vx, vy, vtheta);
+            brain->client->setVelocity(vx, vy, vtheta, false, false, false);
         };
 
         auto commandOpponentGoalKickGoalFrontAvoidance = [&](const Pose2D &finalTarget) {
@@ -2614,7 +2614,7 @@ NodeStatus GoToFreekickPosition::onRunning() {
             }
 
             vtheta = cap(vtheta, 1.5, -1.5);
-            brain->client->setVelocity(vx, vy, vtheta);
+            brain->client->setVelocity(vx, vy, vtheta, false, false, false);
         };
 
         auto commandOpponentGoalKickDefenseRetreat = [&]() {
@@ -3270,7 +3270,7 @@ NodeStatus GoToFreekickPosition::onRunning() {
         vx = cap(vx, vxLimit, -0.4);
         vy = cap(vy, vyLimit, -vyLimit);
 
-        brain->client->setVelocity(vx, vy, vtheta);
+        brain->client->setVelocity(vx, vy, vtheta, false, false, false);
         return NodeStatus::RUNNING;
     }
 

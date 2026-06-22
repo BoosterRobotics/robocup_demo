@@ -3,21 +3,10 @@ camera:
   # depth_topic: "/camera/robot0_rgbd_camera/depth/image_raw" # sim
   # intrin_topic: "/camera/robot0_rgbd_camera/rgb/camera_info" # sim
 
-  color_topic: "/boostercamera/head/rgb" # d-robotics
-  depth_topic: "/boostercamera/head/depth" # d-robotics
-  intrin_topic: "/boostercamera/head/rgb/camera_info" # d-robotics
+  color_topic: "/boostercamera/head/rgb" # In version 1.6, camera topics of different types were uniformly named.
+  depth_topic: "/boostercamera/head/depth" # In version 1.6, camera topics of different types were uniformly named.
+  intrin_topic: "/boostercamera/head/rgb/camera_info" # In version 1.6, camera topics of different types were uniformly named.
 
-  # color_topic: "/camera/color/image_raw" # orbbec
-  # depth_topic: "/camera/depth/image_raw" # orbbec
-  # intrin_topic: "/camera/color/camera_info" # orbbec
-
-  # color_topic: "/camera/camera/color/image_raw" # realsense
-  # depth_topic: "/camera/camera/aligned_depth_to_color/image_raw" # realsense
-  # intrin_topic: "/camera/camera/color/camera_info" # realsense
-
-  # color_topic: "/zed/zed_node/left/image_rect_color" # zed
-  # depth_topic: "/zed/zed_node/depth/depth_registered" # zed
-  # intrin_topic: "/zed/zed_node/left/camera_info" # zed
   intrin:
     fx: 206.445511
     fy: 206.445511
