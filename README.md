@@ -1,5 +1,10 @@
 # Booster RoboCup Demo
 
+## 2026 GameController and Rule Adaptation Branch
+For teams preparing for the latest RoboCup rule updates and the new GameController workflow used for the Korea competition, updates in the following branch are available for reference: [sandbox/support_2026_game_controller](GitHub - BoosterRobotics/robocup_demo at sandbox/support_2026_game_controller).
+
+This branch includes adaptations for updated competition rules, the new GameController integration, match communication behavior, 5v5 game support, and whistle detection. Penalty kick strategy has not yet been implemented. Please review and test the branch before using it in competition.
+
 ## NOTICE
 The latest RoboCup rules do not allow unicast communication between robots and impose limits on the data size of communication packets during matches. This part of the rules has not yet been addressed in the current open‑source code. If robot communication is required in the competition, the implementation in brain_communication.cpp needs to be modified to comply with the rules.
 
