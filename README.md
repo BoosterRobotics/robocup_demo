@@ -1,7 +1,7 @@
 # Booster RoboCup Demo
 
 ## 2026 GameController and Rule Adaptation Branch
-For teams preparing for the latest RoboCup rule updates and the new GameController workflow used for the Korea competition, updates in the following branch are available for reference: [sandbox/support_2026_game_controller](GitHub - BoosterRobotics/robocup_demo at sandbox/support_2026_game_controller).
+For teams preparing for the latest RoboCup rule updates and the new GameController workflow used for the Korea competition, updates in the following branch are available for reference: [sandbox/support_2026_game_controller](https://github.com/BoosterRobotics/robocup_demo/tree/sandbox/support_2026_game_controller).
 
 This branch includes adaptations for updated competition rules, the new GameController integration, match communication behavior, 5v5 game support, and whistle detection. Penalty kick strategy has not yet been implemented. Please review and test the branch before using it in competition.
 
