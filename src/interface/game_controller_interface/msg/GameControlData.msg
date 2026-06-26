@@ -1,4 +1,5 @@
-# Keep consistent with RoboCupGameControlData (GameController v19).
+# Normalized GameController data published by the local receiver.
+# Accepts official wire protocol v19 and v20; penalties are v19-compatible.
 
 char[4] header
 uint8 version

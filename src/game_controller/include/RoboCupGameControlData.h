@@ -7,7 +7,13 @@
 #define GAMECONTROLLER_RETURN_PORT 3939
 
 #define GAMECONTROLLER_STRUCT_HEADER  "RGme"
-#define GAMECONTROLLER_STRUCT_VERSION 19
+#define GAMECONTROLLER_STRUCT_VERSION_V19 19
+#define GAMECONTROLLER_STRUCT_VERSION_V20 20
+
+// The strategy stack consumes v19-compatible penalty values. The receiver can
+// parse both v19 and v20 wire formats and normalizes v20 penalties before
+// publishing ROS messages.
+#define GAMECONTROLLER_STRUCT_VERSION GAMECONTROLLER_STRUCT_VERSION_V19
 
 #define MAX_NUM_PLAYERS 20
 
@@ -47,24 +53,59 @@
 
 #define KICKING_TEAM_NONE 255
 
-#define PENALTY_NONE                    0
-#define PENALTY_ILLEGAL_POSITIONING     1
-#define PENALTY_MOTION_IN_SET           2
-#define PENALTY_LOCAL_GAME_STUCK        3
-#define PENALTY_INCAPABLE_ROBOT         4
-#define PENALTY_PICK_UP                 5
-#define PENALTY_BALL_HOLDING            6
-#define PENALTY_LEAVING_THE_FIELD       7
-#define PENALTY_PLAYING_WITH_ARMS_HANDS 8
-#define PENALTY_PUSHING                 9
-#define PENALTY_SENT_OFF                10
-#define PENALTY_SUBSTITUTE              11
+#define PENALTY_V19_NONE                    0
+#define PENALTY_V19_ILLEGAL_POSITIONING     1
+#define PENALTY_V19_MOTION_IN_SET           2
+#define PENALTY_V19_LOCAL_GAME_STUCK        3
+#define PENALTY_V19_INCAPABLE_ROBOT         4
+#define PENALTY_V19_PICK_UP                 5
+#define PENALTY_V19_BALL_HOLDING            6
+#define PENALTY_V19_LEAVING_THE_FIELD       7
+#define PENALTY_V19_PLAYING_WITH_ARMS_HANDS 8
+#define PENALTY_V19_PUSHING                 9
+#define PENALTY_V19_SENT_OFF                10
+#define PENALTY_V19_SUBSTITUTE              11
+
+#define PENALTY_NONE                    PENALTY_V19_NONE
+#define PENALTY_ILLEGAL_POSITIONING     PENALTY_V19_ILLEGAL_POSITIONING
+#define PENALTY_MOTION_IN_SET           PENALTY_V19_MOTION_IN_SET
+#define PENALTY_LOCAL_GAME_STUCK        PENALTY_V19_LOCAL_GAME_STUCK
+#define PENALTY_INCAPABLE_ROBOT         PENALTY_V19_INCAPABLE_ROBOT
+#define PENALTY_PICK_UP                 PENALTY_V19_PICK_UP
+#define PENALTY_BALL_HOLDING            PENALTY_V19_BALL_HOLDING
+#define PENALTY_LEAVING_THE_FIELD       PENALTY_V19_LEAVING_THE_FIELD
+#define PENALTY_PLAYING_WITH_ARMS_HANDS PENALTY_V19_PLAYING_WITH_ARMS_HANDS
+#define PENALTY_PUSHING                 PENALTY_V19_PUSHING
+#define PENALTY_SENT_OFF                PENALTY_V19_SENT_OFF
+#define PENALTY_SUBSTITUTE              PENALTY_V19_SUBSTITUTE
+
+#define PENALTY_V20_NONE                    0
+#define PENALTY_V20_ILLEGAL_POSITIONING     1
+#define PENALTY_V20_MOTION_IN_SET           2
+#define PENALTY_V20_MOTION_IN_STOP          3
+#define PENALTY_V20_LOCAL_GAME_STUCK        4
+#define PENALTY_V20_INCAPABLE_ROBOT         5
+#define PENALTY_V20_PICK_UP                 6
+#define PENALTY_V20_BALL_HOLDING            7
+#define PENALTY_V20_LEAVING_THE_FIELD       8
+#define PENALTY_V20_PLAYING_WITH_ARMS_HANDS 9
+#define PENALTY_V20_PUSHING                 10
+#define PENALTY_V20_CAUTIONED               11
+#define PENALTY_V20_SENT_OFF                12
+#define PENALTY_V20_SUBSTITUTE              13
 
 struct RobotInfo
 {
   uint8_t penalty;
   uint8_t secsTillUnpenalised;
   uint8_t warnings;
+  uint8_t cautions;
+};
+
+struct RobotInfoV20
+{
+  uint8_t penalty;
+  uint8_t secsTillUnpenalised;
   uint8_t cautions;
 };
 
@@ -79,6 +120,19 @@ struct TeamInfo
   uint16_t singleShots;
   uint16_t messageBudget;
   struct RobotInfo players[MAX_NUM_PLAYERS];
+};
+
+struct TeamInfoV20
+{
+  uint8_t teamNumber;
+  uint8_t fieldPlayerColour;
+  uint8_t goalkeeperColour;
+  uint8_t goalkeeper;
+  uint8_t score;
+  uint8_t penaltyShot;
+  uint16_t singleShots;
+  uint16_t messageBudget;
+  struct RobotInfoV20 players[MAX_NUM_PLAYERS];
 };
 
 struct RoboCupGameControlData
@@ -98,6 +152,28 @@ struct RoboCupGameControlData
   int16_t secondaryTime;
   struct TeamInfo teams[2];
 };
+
+struct RoboCupGameControlDataV20
+{
+  char header[4];
+  uint8_t version;
+  uint8_t packetNumber;
+  uint8_t playersPerTeam;
+  uint8_t competitionType;
+  uint8_t stopped;
+  uint8_t gamePhase;
+  uint8_t state;
+  uint8_t setPlay;
+  uint8_t firstHalf;
+  uint8_t kickingTeam;
+  int16_t secsRemaining;
+  int16_t secondaryTime;
+  struct TeamInfoV20 teams[2];
+};
+
+typedef struct RobotInfo RobotInfoV19;
+typedef struct TeamInfo TeamInfoV19;
+typedef struct RoboCupGameControlData RoboCupGameControlDataV19;
 
 #define GAMECONTROLLER_RETURN_STRUCT_HEADER  "RGrt"
 #define GAMECONTROLLER_RETURN_STRUCT_VERSION 4
