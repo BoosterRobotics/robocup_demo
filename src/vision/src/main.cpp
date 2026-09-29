@@ -19,6 +19,11 @@ int main(int argc, char **argv) {
     // stable template.
     std::vector<std::string> config_paths;
     for (int i = 2; i < argc; ++i) {
+        // ros2 launch appends its own arguments after this marker. They must
+        // remain available to rclcpp::init, but are not YAML override files.
+        if (std::string(argv[i]) == "--ros-args") {
+            break;
+        }
         config_paths.emplace_back(argv[i]);
     }
     if (!node->Init(config_template_path, config_paths)) {
