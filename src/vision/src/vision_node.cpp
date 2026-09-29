@@ -5,11 +5,14 @@
 #include <array>
 #include <chrono>
 #include <cmath>
+#include <cctype>
 #include <functional>
 #include <filesystem>
 #include <iomanip>
 #include <iostream>
 #include <limits>
+#include <cstdio>
+#include <regex>
 #include <sstream>
 #include <fstream>
 #include <stdexcept>
@@ -39,6 +42,218 @@ int64_t SteadyNowMs() {
         std::chrono::steady_clock::now().time_since_epoch()).count();
 }
 
+std::string ToLowerAscii(std::string value) {
+    std::transform(value.begin(), value.end(), value.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    return value;
+}
+
+std::string ReadTextFile(const std::filesystem::path &path) {
+    std::ifstream ifs(path);
+    if (!ifs.is_open()) {
+        return "";
+    }
+    std::ostringstream ss;
+    ss << ifs.rdbuf();
+    return ss.str();
+}
+
+std::string RunCommandCaptureStdout(const std::string &command) {
+    std::array<char, 256> buffer{};
+    std::string output;
+    FILE *pipe = popen(command.c_str(), "r");
+    if (!pipe) {
+        return output;
+    }
+    while (fgets(buffer.data(), static_cast<int>(buffer.size()), pipe) != nullptr) {
+        output += buffer.data();
+    }
+    pclose(pipe);
+    return output;
+}
+
+std::string ExtractJsonStringField(
+    const std::string &text, const std::string &field_name) {
+    const std::regex quoted_field_regex(
+        "\\\"" + field_name + "\\\"\\s*:\\s*\\\"([^\\\"]*)\\\"",
+        std::regex_constants::icase);
+    std::smatch match;
+    if (std::regex_search(text, match, quoted_field_regex) && match.size() >= 2) {
+        return match[1].str();
+    }
+
+    // Keep a small fallback for booster-cli versions that print a human-readable
+    // `Model: T2` line instead of JSON.
+    const std::regex plain_field_regex(
+        "(^|[\\n,])\\s*" + field_name + "\\s*[:=]\\s*([^,\\n}]+)",
+        std::regex_constants::icase);
+    if (std::regex_search(text, match, plain_field_regex) && match.size() >= 3) {
+        std::string value = match[2].str();
+        value.erase(value.begin(), std::find_if(value.begin(), value.end(),
+                                                [](unsigned char c) {
+                                                    return !std::isspace(c) && c != '\"';
+                                                }));
+        value.erase(std::find_if(value.rbegin(), value.rend(),
+                                 [](unsigned char c) {
+                                     return !std::isspace(c) && c != '\"';
+                                 }).base(), value.end());
+        return value;
+    }
+    return "";
+}
+
+bool ParseFloat3(const std::string &value, float *x, float *y, float *z) {
+    std::istringstream iss(value);
+    return static_cast<bool>(iss >> *x >> *y >> *z);
+}
+
+std::string ExtractXmlAttribute(const std::string &xml, const std::string &attr_name) {
+    const std::regex attr_regex(attr_name + "\\s*=\\s*\"([^\"]*)\"");
+    std::smatch match;
+    if (std::regex_search(xml, match, attr_regex) && match.size() >= 2) {
+        return match[1].str();
+    }
+    return "";
+}
+
+bool LoadFixedJointChildToParentPose(
+    const std::filesystem::path &urdf_path,
+    const std::string &child_link,
+    Pose *child2parent) {
+    if (child2parent == nullptr) {
+        return false;
+    }
+    const std::string urdf = ReadTextFile(urdf_path);
+    if (urdf.empty()) {
+        std::cerr << "Failed to read URDF: " << urdf_path << std::endl;
+        return false;
+    }
+
+    size_t search_pos = 0;
+    while (true) {
+        const size_t joint_start = urdf.find("<joint", search_pos);
+        if (joint_start == std::string::npos) {
+            break;
+        }
+        const size_t joint_end = urdf.find("</joint>", joint_start);
+        if (joint_end == std::string::npos) {
+            break;
+        }
+        search_pos = joint_end + std::string("</joint>").size();
+        const std::string joint_xml = urdf.substr(joint_start, search_pos - joint_start);
+        if (joint_xml.find("<child") == std::string::npos ||
+            joint_xml.find("link=\"" + child_link + "\"") == std::string::npos) {
+            continue;
+        }
+
+        const std::regex origin_regex("<origin\\b[^>]*/?>");
+        std::smatch origin_match;
+        if (!std::regex_search(joint_xml, origin_match, origin_regex)) {
+            std::cerr << "URDF joint for child link " << child_link
+                      << " has no origin." << std::endl;
+            return false;
+        }
+
+        const std::string origin_xml = origin_match[0].str();
+        float x = 0.0f;
+        float y = 0.0f;
+        float z = 0.0f;
+        float roll = 0.0f;
+        float pitch = 0.0f;
+        float yaw = 0.0f;
+        const std::string xyz = ExtractXmlAttribute(origin_xml, "xyz");
+        if (!xyz.empty() && !ParseFloat3(xyz, &x, &y, &z)) {
+            std::cerr << "Invalid xyz in URDF origin for child link "
+                      << child_link << ": " << xyz << std::endl;
+            return false;
+        }
+        const std::string rpy = ExtractXmlAttribute(origin_xml, "rpy");
+        if (!rpy.empty() && !ParseFloat3(rpy, &roll, &pitch, &yaw)) {
+            std::cerr << "Invalid rpy in URDF origin for child link "
+                      << child_link << ": " << rpy << std::endl;
+            return false;
+        }
+
+        *child2parent = Pose(x, y, z, roll, pitch, yaw);
+        return true;
+    }
+
+    std::cerr << "URDF child link not found: " << child_link
+              << " in " << urdf_path << std::endl;
+    return false;
+}
+
+std::filesystem::path ResolveAutoCalibrationUrdfPath(
+    const std::string &robot_model_lower, const std::string &urdf_name) {
+    std::vector<std::filesystem::path> candidates;
+
+    try {
+        const std::filesystem::path package_path =
+            ament_index_cpp::get_package_share_directory("vision");
+        candidates.emplace_back(package_path / "config" / urdf_name);
+    } catch (const std::exception &) {
+        // The package share is unavailable in local/static checks; continue
+        // with the source and robot-image paths below.
+    }
+
+    candidates.emplace_back(std::filesystem::path("config") / urdf_name);
+
+    if (robot_model_lower.find("t2") != std::string::npos) {
+        candidates.emplace_back(
+            std::filesystem::path(
+                "/home/yss/robocup_all/motion_train/booster_assets/robots/T2/T2_31dof") /
+            urdf_name);
+        candidates.emplace_back(
+            std::filesystem::path(
+                "/home/yss/robocup_all/motion_train/booster_motion/booster_config/"
+                "robot_config/kidsize/booster_assets/robots/T2/T2_31dof") /
+            urdf_name);
+        candidates.emplace_back(
+            std::filesystem::path("/opt/booster/booster_assets/robots/T2/T2_31dof") /
+            urdf_name);
+        candidates.emplace_back(
+            std::filesystem::path("/opt/booster/robots/T2/T2_31dof") / urdf_name);
+        // Production robot images may install the same model under the
+        // firmware model directory and use a versioned filename.
+        candidates.emplace_back(
+            std::filesystem::path("/home/booster/etc/robot_models/T2") /
+            urdf_name);
+        candidates.emplace_back(
+            std::filesystem::path("/home/booster/etc/robot_models/T2") /
+            "T2_v1p2_31dof.urdf");
+        candidates.emplace_back(
+            std::filesystem::path("/opt/booster/robot_models/T2") /
+            urdf_name);
+        candidates.emplace_back(
+            std::filesystem::path("/opt/booster/robot_models/T2") /
+            "T2_v1p2_31dof.urdf");
+    } else if (robot_model_lower.find("k1") != std::string::npos) {
+        candidates.emplace_back(
+            std::filesystem::path(
+                "/home/yss/robocup_all/motion_train/booster_assets/robots/K1") /
+            urdf_name);
+        candidates.emplace_back(
+            std::filesystem::path("/opt/booster/booster_assets/robots/K1") /
+            urdf_name);
+    } else if (robot_model_lower.find("t1") != std::string::npos) {
+        candidates.emplace_back(
+            std::filesystem::path(
+                "/home/yss/robocup_all/motion_train/booster_assets/robots/T1") /
+            urdf_name);
+        candidates.emplace_back(
+            std::filesystem::path("/opt/booster/booster_assets/robots/T1") /
+            urdf_name);
+    }
+
+    for (const auto &candidate : candidates) {
+        std::error_code error;
+        if (std::filesystem::is_regular_file(candidate, error)) {
+            return candidate;
+        }
+    }
+    return {};
+}
+
 } // namespace
 
 VisionNode::VisionNode(const std::string &node_name) :
@@ -57,18 +272,28 @@ VisionNode::VisionNode(const std::string &node_name) :
 // TODO(GW): oneline offline
 bool VisionNode::Init(
     const std::string &cfg_template_path,
-    const std::string &cfg_path) {
+    const std::vector<std::string> &cfg_paths) {
     if (!std::filesystem::exists(cfg_template_path)) {
         std::cerr << "Error: Configuration template file '" << cfg_template_path << "' does not exist." << std::endl;
         return false;
     }
 
     YAML::Node node = YAML::LoadFile(cfg_template_path);
-    if (!std::filesystem::exists(cfg_path)) {
-        std::cout << "Warning: Configuration file empty!" << std::endl;
-    } else {
+    // Merge every optional override on top of the complete runtime template.
+    // Calibration output files are intentionally allowed to contain only
+    // camera/calibration fields; missing detector and synchronization settings
+    // remain supplied by the complete local vision.yaml template.
+    for (const auto &cfg_path : cfg_paths) {
+        if (cfg_path.empty()) {
+            continue;
+        }
+        if (!std::filesystem::exists(cfg_path)) {
+            std::cout << "Warning: Configuration override file '"
+                      << cfg_path << "' does not exist; skipping."
+                      << std::endl;
+            continue;
+        }
         YAML::Node cfg_node = YAML::LoadFile(cfg_path);
-        // merge input cfg to template cfg
         MergeYAML(node, cfg_node);
     }
 
@@ -102,9 +327,15 @@ bool VisionNode::Init(
         const std::filesystem::path relative_path(configured_path);
         const std::filesystem::path package_dir =
             ament_index_cpp::get_package_share_directory("vision");
-        const std::array<std::filesystem::path, 2> config_dirs{
-            std::filesystem::path(cfg_path).parent_path(),
-            std::filesystem::path(cfg_template_path).parent_path()};
+        std::vector<std::filesystem::path> config_dirs;
+        for (auto it = cfg_paths.rbegin(); it != cfg_paths.rend(); ++it) {
+            if (!it->empty()) {
+                config_dirs.emplace_back(
+                    std::filesystem::path(*it).parent_path());
+            }
+        }
+        config_dirs.emplace_back(
+            std::filesystem::path(cfg_template_path).parent_path());
         for (const auto &config_dir : config_dirs) {
             if (config_dir.empty()) continue;
             const std::filesystem::path config_candidate = config_dir / relative_path;
@@ -162,10 +393,11 @@ bool VisionNode::Init(
         std::cerr << "no camera param found here" << std::endl;
         return false;
     } else {
-        if(camera_type_.empty())
-        {
-            std::cout << "camera type not overridden by launch file, using default: " << node["camera"]["type"].as<std::string>() << std::endl;
-            camera_type_ = node["camera"]["type"].as<std::string>();
+        if (camera_type_.empty()) {
+            camera_type_ = as_or<std::string>(node["camera"]["type"], "");
+            std::cout << "camera type not overridden by launch file, using configuration: "
+                      << (camera_type_.empty() ? "<unspecified>" : camera_type_)
+                      << std::endl;
         }
         yaml_intr_ = Intrinsics(node["camera"]["intrin"]);
         intr_ = yaml_intr_;
@@ -191,6 +423,13 @@ bool VisionNode::Init(
             node["camera"]["ball_y_compensation"], 0.0);
 
         p_headprime2head_ = Pose(0, 0, z_comp, 0, pitch_comp * M_PI / 180, yaw_comp * M_PI / 180);
+    }
+
+    if (!InitAutoCalibrationPoseAdapter(node)) {
+        RCLCPP_ERROR(
+            get_logger(),
+            "Automatic calibration is enabled, but the robot/camera pose adapter could not be initialized.");
+        return false;
     }
 
     depth_scale_16u_ = std::max(
@@ -330,12 +569,15 @@ bool VisionNode::Init(
     }
 
     intrinsics_wait_start_ = std::chrono::steady_clock::now();
-    if (offline_mode_) {
-        intrinsics_source_ = IntrinsicsSource::kYamlFallback;
+    if (auto_calibrate_ || offline_mode_) {
+        intrinsics_source_ = auto_calibrate_
+            ? IntrinsicsSource::kCalibratedYaml
+            : IntrinsicsSource::kYamlFallback;
         RCLCPP_INFO(
             get_logger(),
-            "[vision][intrinsics] offline mode: using vision.yaml intrinsics "
+            "[vision][intrinsics] %s: using vision.yaml intrinsics "
             "fx=%.6f fy=%.6f cx=%.6f cy=%.6f",
+            auto_calibrate_ ? "automatic calibration" : "offline mode",
             yaml_intr_.fx, yaml_intr_.fy, yaml_intr_.cx, yaml_intr_.cy);
     } else {
         intrinsics_fallback_timer_ = this->create_wall_timer(
@@ -395,7 +637,7 @@ bool VisionNode::Init(
         depth_sub_ = it_->subscribe(depth_topic, 2, &VisionNode::DepthCallback, this, nullptr, sub_opt_3);
     }
 
-    if (!offline_mode_) {
+    if (!offline_mode_ && !auto_calibrate_) {
         camera_info_sub_ = this->create_subscription<sensor_msgs::msg::CameraInfo>(
             "/boostercamera/head/rgb/camera_info", 10,
             std::bind(&VisionNode::CameraInfoCallback, this, std::placeholders::_1),
@@ -448,7 +690,11 @@ bool VisionNode::Init(
             "[vision][head pose subscription] topic=%s type=PoseStamped "
             "qos=best_effort/volatile depth=100",
             head_pose_topic_.c_str());
-        calParam_sub_ = this->create_subscription<vision_interface::msg::CalParam>("/booster_vision/cal_param", 10, std::bind(&VisionNode::CalParamCallback, this, std::placeholders::_1));
+        if (!auto_calibrate_) {
+            calParam_sub_ = this->create_subscription<vision_interface::msg::CalParam>(
+                "/booster_vision/cal_param", 10,
+                std::bind(&VisionNode::CalParamCallback, this, std::placeholders::_1));
+        }
         pose_tf_pub_ = this->create_publisher<geometry_msgs::msg::TransformStamped>("/booster_vision/t_head2base", rclcpp::QoS(10));
     }
 
@@ -680,6 +926,136 @@ void VisionNode::CameraInfoCallback(
     }
     ApplyRuntimeIntrinsics(Intrinsics(
         fx, fy, cx, cy, distortion_coeffs, Intrinsics::kBrownConrady));
+}
+
+bool VisionNode::InitAutoCalibrationPoseAdapter(const YAML::Node &node) {
+    auto_calibrate_ = as_or<bool>(node["calibration"]["auto_calibrate"], false);
+    auto_calibrate_pose_ready_ = false;
+    if (!auto_calibrate_) {
+        std::cout << "auto_calibrate: false" << std::endl;
+        return true;
+    }
+
+    // Offline data already contains the pose that should be used by the
+    // synchronizer. Do not require booster-cli or a robot URDF in this mode.
+    if (offline_mode_) {
+        p_headprime2head_ = Pose();
+        auto_calibrate_pose_ready_ = true;
+        std::cout << "auto_calibrate: true (offline transform input)" << std::endl;
+        return true;
+    }
+
+    std::string robot_info =
+        RunCommandCaptureStdout("LD_LIBRARY_PATH='' booster-cli robot_info");
+    auto_calibrate_robot_model_ = ExtractJsonStringField(robot_info, "Model");
+    if (auto_calibrate_robot_model_.empty()) {
+        robot_info = RunCommandCaptureStdout("booster-cli robot_info");
+        auto_calibrate_robot_model_ = ExtractJsonStringField(robot_info, "Model");
+    }
+    const std::string robot_model_lower = ToLowerAscii(auto_calibrate_robot_model_);
+
+    std::string urdf_name;
+    if (robot_model_lower.find("k1") != std::string::npos) {
+        urdf_name = "K1_22dof.urdf";
+    } else if (robot_model_lower.find("t1") != std::string::npos) {
+        urdf_name = "T1_23dof.urdf";
+    } else if (robot_model_lower.find("t2") != std::string::npos) {
+        // T2 uses the 31-DOF model from booster_assets, installed in the
+        // vision config directory with absolute-path fallbacks for robot images.
+        urdf_name = "T2_31dof.urdf";
+    } else {
+        std::cerr
+            << "auto_calibrate enabled, but unsupported robot Model from "
+               "booster-cli robot_info: "
+            << auto_calibrate_robot_model_ << std::endl;
+        return false;
+    }
+
+    const std::string perception_info = ReadTextFile("/opt/booster/perception_info.yaml");
+    const std::string perception_info_lower = ToLowerAscii(perception_info);
+    // A launch parameter is an explicit override. If it is empty, use the
+    // merged YAML value; this also handles YAML files that omit camera.type.
+    const std::string configured_camera_type = ToLowerAscii(
+        camera_type_.empty()
+            ? as_or<std::string>(node["camera"]["type"], "")
+            : camera_type_);
+
+    // T2_31dof contains the Booster stereo RGB link used by the T2 calibration
+    // file. Select it from the robot model directly; T2's perception file may
+    // be absent on development images and its unified topic name is generic.
+    if (robot_model_lower.find("t2") != std::string::npos) {
+        auto_calibrate_camera_link_ = "head_booster_stereo_rgb_link";
+    // Prefer the robot image's perception description for K1/T1. The unified
+    // camera topics do not identify the physical camera, so camera.type is
+    // only a fallback.
+    } else if (perception_info_lower.find("realsense") != std::string::npos) {
+        auto_calibrate_camera_link_ = "head_realsense_rgb_link";
+    } else if (perception_info_lower.find("boostermipi") != std::string::npos ||
+               perception_info_lower.find("booster_mipi") != std::string::npos ||
+               perception_info_lower.find("d-robotics") != std::string::npos ||
+               perception_info_lower.find("drobotics") != std::string::npos) {
+        auto_calibrate_camera_link_ = "head_booster_stereo_rgb_link";
+    } else if (configured_camera_type.find("realsense") != std::string::npos) {
+        auto_calibrate_camera_link_ = "head_realsense_rgb_link";
+    } else if (configured_camera_type.find("boostermipi") != std::string::npos ||
+               configured_camera_type.find("booster_mipi") != std::string::npos ||
+               configured_camera_type.find("d-robotics") != std::string::npos ||
+               configured_camera_type.find("drobotics") != std::string::npos) {
+        auto_calibrate_camera_link_ = "head_booster_stereo_rgb_link";
+    } else {
+        std::cerr
+            << "auto_calibrate enabled, but camera type is missing or unsupported in "
+               "/opt/booster/perception_info.yaml and camera.type."
+            << std::endl;
+        return false;
+    }
+
+    if (robot_model_lower.find("t1") != std::string::npos &&
+        auto_calibrate_camera_link_ == "head_booster_stereo_rgb_link") {
+        std::cerr << "auto_calibrate enabled, but T1 only supports "
+                     "head_realsense_rgb_link."
+                  << std::endl;
+        return false;
+    }
+
+    const std::filesystem::path urdf_path =
+        ResolveAutoCalibrationUrdfPath(robot_model_lower, urdf_name);
+    if (urdf_path.empty()) {
+        std::cerr << "auto_calibrate enabled, but URDF '" << urdf_name
+                  << "' could not be found. Checked the vision package, local "
+                     "config directory, and booster_assets paths."
+                  << std::endl;
+        return false;
+    }
+
+    if (!LoadFixedJointChildToParentPose(
+            urdf_path, auto_calibrate_camera_link_, &p_camera_link2pitchlink_)) {
+        return false;
+    }
+
+    // In auto-calibration format camera.extrin is the residual hand-eye
+    // transform. The nominal camera-link pose comes from the URDF above.
+    p_headprime2head_ = Pose();
+    auto_calibrate_pose_ready_ = true;
+    std::cout << "auto_calibrate: true"
+              << ", robot_model: " << auto_calibrate_robot_model_
+              << ", urdf: " << urdf_path
+              << ", camera_link: " << auto_calibrate_camera_link_
+              << std::endl;
+    std::cout << "auto_calibrate headpoint2pitchlink: "
+              << p_headpoint2pitchlink_ << std::endl;
+    std::cout << "auto_calibrate camera_link2pitchlink: "
+              << p_camera_link2pitchlink_ << std::endl;
+    return true;
+}
+
+Pose VisionNode::AdaptHeadPoseForAutoCalibration(
+    const Pose &headpoint2base) const {
+    if (!auto_calibrate_pose_ready_) {
+        return headpoint2base;
+    }
+    return headpoint2base * p_headpoint2pitchlink_.inverse() *
+        p_camera_link2pitchlink_;
 }
 
 void VisionNode::ProcessData(SyncedDataBlock &synced_data, vision_interface::msg::Detections &detection_msg) {
@@ -1435,6 +1811,7 @@ void VisionNode::PoseStampedCallback(
         static_cast<float>(orientation.y * inv_quaternion_norm),
         static_cast<float>(orientation.z * inv_quaternion_norm),
         static_cast<float>(orientation.w * inv_quaternion_norm));
+    pose = AdaptHeadPoseForAutoCalibration(pose);
     data_syncer_->AddPose(PoseDataBlock(pose, timestamp));
     if (seg_data_syncer_) {
         seg_data_syncer_->AddPose(PoseDataBlock(pose, timestamp));
@@ -1463,7 +1840,7 @@ void VisionNode::PoseStampedCallback(
 
 void VisionNode::CalParamCallback(
     const vision_interface::msg::CalParam::ConstSharedPtr msg) {
-    if (!msg) {
+    if (!msg || auto_calibrate_pose_ready_) {
         return;
     }
     float pitch_comp = msg->pitch_compensation;

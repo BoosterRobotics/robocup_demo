@@ -864,6 +864,12 @@ void Brain::init()
     headPoseStampedSubscription = create_subscription<geometry_msgs::msg::PoseStamped>(
         headPoseTopic, rclcpp::QoS(rclcpp::KeepLast(10)).best_effort(),
         bind(&Brain::headPoseStampedCallback, this, _1));
+    // Prefer the pose published by VisionNode. It contains the URDF camera-link
+    // pose when automatic calibration is enabled, while legacy mode publishes
+    // the raw head pose; camera.extrin is applied in the callback for both.
+    headPoseTfSubscription = create_subscription<geometry_msgs::msg::TransformStamped>(
+        "/booster_vision/t_head2base", rclcpp::QoS(10),
+        bind(&Brain::headPoseTfCallback, this, _1));
     recoveryStateSubscription = create_subscription<booster_interface::msg::RawBytesMsg>("fall_down_recovery_state", SUB_STATE_QUEUE_SIZE, bind(&Brain::recoveryStateCallback, this, _1));
 
     if (config->rerunLogEnableFile || config->rerunLogEnableTCP) {
@@ -5916,7 +5922,10 @@ void Brain::headPoseCallback(const geometry_msgs::msg::Pose& msg)
     // Once the timestamped T2 stream is available, do not let a legacy
     // callback with a different frame convention overwrite its transform.
     std::lock_guard<std::recursive_mutex> stateLock(recoveryStateMutex_);
-    if (timestampedHeadPoseSeen_.load()) return;
+    if (timestampedHeadPoseSeen_.load(std::memory_order_relaxed) ||
+        visionCameraTransformSeen_.load(std::memory_order_relaxed)) {
+        return;
+    }
     updateCameraToRobot(msg);
 }
 
@@ -6024,6 +6033,9 @@ void Brain::updateCameraToRobot(const geometry_msgs::msg::Pose& msg)
 void Brain::headPoseStampedCallback(const geometry_msgs::msg::PoseStamped &msg)
 {
     std::lock_guard<std::recursive_mutex> stateLock(recoveryStateMutex_);
+    if (visionCameraTransformSeen_.load(std::memory_order_relaxed)) {
+        return;
+    }
     updateCameraToRobot(msg.pose);
     if (!cameraTransformValid_) return;
 
@@ -6043,6 +6055,77 @@ void Brain::headPoseStampedCallback(const geometry_msgs::msg::PoseStamped &msg)
         cameraTransformBuffer_.clear();
     }
     cameraTransformBuffer_.push_back({poseStamp, data->camToRobot});
+
+    const double bufferMsecs = std::max(
+        100.0,
+        get_parameter("vision.depth_pose_buffer_msecs").as_double());
+    const int64_t bufferNsecs = static_cast<int64_t>(bufferMsecs * 1e6);
+    while (!cameraTransformBuffer_.empty() &&
+           poseStamp.nanoseconds() -
+                   cameraTransformBuffer_.front().stamp.nanoseconds() >
+               bufferNsecs) {
+        cameraTransformBuffer_.pop_front();
+    }
+}
+
+void Brain::headPoseTfCallback(const geometry_msgs::msg::TransformStamped &msg)
+{
+    std::lock_guard<std::recursive_mutex> stateLock(recoveryStateMutex_);
+    const rclcpp::Time poseStamp(msg.header.stamp, RCL_ROS_TIME);
+    if (poseStamp.nanoseconds() <= 0) {
+        RCLCPP_WARN_THROTTLE(
+            get_logger(), *get_clock(), 5000,
+            "Ignoring VisionNode camera transform with an invalid stamp");
+        return;
+    }
+
+    const auto &translation = msg.transform.translation;
+    const auto &rotation = msg.transform.rotation;
+    const double quaternionNorm = std::sqrt(
+        rotation.x * rotation.x + rotation.y * rotation.y +
+        rotation.z * rotation.z + rotation.w * rotation.w);
+    if (!std::isfinite(quaternionNorm) || quaternionNorm < 1e-8 ||
+        !std::isfinite(translation.x) || !std::isfinite(translation.y) ||
+        !std::isfinite(translation.z)) {
+        cameraTransformValid_ = false;
+        RCLCPP_WARN_THROTTLE(
+            get_logger(), *get_clock(), 5000,
+            "Ignoring invalid VisionNode camera transform");
+        return;
+    }
+
+    Eigen::Quaterniond q(
+        rotation.w / quaternionNorm,
+        rotation.x / quaternionNorm,
+        rotation.y / quaternionNorm,
+        rotation.z / quaternionNorm);
+    Eigen::Matrix4d nominalHeadToBase = Eigen::Matrix4d::Identity();
+    nominalHeadToBase.block<3, 3>(0, 0) = q.toRotationMatrix();
+    nominalHeadToBase.block<3, 1>(0, 3) = Eigen::Vector3d(
+        translation.x, translation.y, translation.z);
+    // The VisionNode transform is the raw head pose in legacy mode and the
+    // nominal camera-link pose in automatic-calibration mode. In both cases
+    // camera.extrin supplies the remaining camera-to-head/link transform.
+    const Eigen::Matrix4d cameraToRobot = nominalHeadToBase * config->camToHead;
+    if (!cameraToRobot.allFinite()) {
+        cameraTransformValid_ = false;
+        return;
+    }
+
+    // Remove raw samples collected before the adapted stream became
+    // available. Mixing frame conventions would make nearest-timestamp
+    // lookup nondeterministic.
+    if (!visionCameraTransformSeen_.exchange(true, std::memory_order_relaxed)) {
+        cameraTransformBuffer_.clear();
+    }
+    timestampedHeadPoseSeen_.store(true, std::memory_order_relaxed);
+    if (!cameraTransformBuffer_.empty() &&
+        poseStamp < cameraTransformBuffer_.back().stamp) {
+        cameraTransformBuffer_.clear();
+    }
+    cameraTransformBuffer_.push_back({poseStamp, cameraToRobot});
+    data->camToRobot = cameraToRobot;
+    cameraTransformValid_ = true;
 
     const double bufferMsecs = std::max(
         100.0,

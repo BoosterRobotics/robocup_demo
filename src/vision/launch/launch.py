@@ -8,17 +8,20 @@ from launch_ros.substitutions import FindPackageShare
 def handle_configuration(context, *args, **kwargs):
     default_config_path = PathJoinSubstitution([FindPackageShare('vision'), 'config']).perform(context)
 
-    user_cfg_dir = LaunchConfiguration('vision_config_path').perform(context)
-    config_path = default_config_path  
-    if user_cfg_dir and user_cfg_dir.strip():
-        cand = user_cfg_dir.rstrip('/')
-        if os.path.exists(os.path.join(cand, 'vision.yaml')):
-            config_path = cand
+    user_cfg_path = LaunchConfiguration('vision_config_path').perform(context).strip()
+    # vision.yaml is the complete local runtime template. A robot-side or
+    # user-supplied vision.yaml is optional and is merged on top of it.
+    config_file = os.path.join(default_config_path, 'vision.yaml')
+    config_override_files = []
+    if user_cfg_path:
+        if os.path.isfile(user_cfg_path):
+            config_override_files.append(user_cfg_path)
         else:
-            print(f"[vision launch] warning: {cand}/vision.yaml not found, fallback to {default_config_path}")
-    config_file = os.path.join(config_path, 'vision.yaml')
-    config_local_file = os.path.join(config_path, 'vision_local.yaml')
-
+            cand = user_cfg_path.rstrip('/')
+            if os.path.isfile(os.path.join(cand, 'vision.yaml')):
+                config_override_files.append(os.path.join(cand, 'vision.yaml'))
+            else:
+                print(f"[vision launch] warning: '{user_cfg_path}' is neither a YAML file nor a directory containing vision.yaml; fallback to {default_config_path}")
     show_det = LaunchConfiguration('show_det')
     show_seg = LaunchConfiguration('show_seg')
     save_data = LaunchConfiguration('save_data')
@@ -35,7 +38,7 @@ def handle_configuration(context, *args, **kwargs):
             executable='vision_node',
             name='vision_node',
             output='screen',
-            arguments=[config_file, config_local_file],
+            arguments=[config_file] + config_override_files,
             parameters=[{
                 'offline_mode': offline_mode,
                 'show_det': show_det,
@@ -55,7 +58,7 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'vision_config_path',
             default_value='',
-            description='Optional directory containing vision.yaml & vision_local.yaml (empty => use package default)'
+            description='Optional vision config directory or standalone YAML override (empty => use package default)'
         ),
         DeclareLaunchArgument(
             "offline_mode",

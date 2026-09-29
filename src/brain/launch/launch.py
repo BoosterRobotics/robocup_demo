@@ -10,26 +10,36 @@ from ament_index_python.packages import get_package_share_directory
 
 
 def handle_configuration(context, *args, **kwargs):
-    vision_config_dir = context.perform_substitution(LaunchConfiguration('vision_config_path')).strip()
+    vision_config_path = context.perform_substitution(LaunchConfiguration('vision_config_path')).strip()
     default_vision_dir = os.path.join(get_package_share_directory('vision'), 'config')
 
-    user_main_file = os.path.join(vision_config_dir, 'vision.yaml')
-    reason = ""
-    if not vision_config_dir:
-        reason = "empty vision_config_path"
-    elif not os.path.isdir(vision_config_dir):
-        reason = f"directory '{vision_config_dir}' not found"
-    elif not os.path.isfile(user_main_file):
-        reason = f"'{user_main_file}' missing"
+    # vision.yaml is the complete local runtime template. A robot-side or
+    # user-supplied vision.yaml is optional and is merged on top of it.
+    vision_template_file = os.path.join(default_vision_dir, 'vision.yaml')
+    calibration_override_file = ''
+    if os.path.isfile(vision_config_path):
+        calibration_override_file = vision_config_path
+    elif vision_config_path:
+        user_main_file = os.path.join(vision_config_path, 'vision.yaml')
+        if os.path.isfile(user_main_file):
+            calibration_override_file = user_main_file
+            user_local_file = os.path.join(vision_config_path, 'vision_local.yaml')
+            if os.path.isfile(user_local_file):
+                # Brain currently accepts one local override. The generated
+                # vision.yaml is the calibration result; retain it as the
+                # selected override when both files are present.
+                print(f"[brain launch] ignoring optional secondary override '{user_local_file}'; vision.yaml takes precedence")
 
-    if reason:
-        print(f"[brain launch] {reason}, fallback to '{default_vision_dir}'")
-        vision_config_dir = default_vision_dir
+    if not os.path.isfile(vision_template_file):
+        print(f"[brain launch] runtime template '{vision_template_file}' is missing")
 
-    vision_config_file = os.path.join(vision_config_dir, 'vision.yaml')
-    vision_config_local_file = os.path.join(vision_config_dir, 'vision_local.yaml')
-    if not os.path.isfile(vision_config_local_file):
-        print(f"[brain launch] optional local override '{vision_config_local_file}' not present")
+    if vision_config_path and not calibration_override_file:
+        print(f"[brain launch] no calibration YAML found under '{vision_config_path}'; using template defaults")
+
+    vision_config_file = vision_template_file
+    vision_config_local_file = calibration_override_file
+    if not vision_config_local_file:
+        print(f"[brain launch] no calibration override selected; using '{vision_config_file}' only")
 
     config_path = os.path.join(os.path.dirname(__file__), '../config')
     config_file = os.path.join(config_path, 'config.yaml')
@@ -96,7 +106,7 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'vision_config_path',
             default_value=os.path.join(get_package_share_directory('vision'), 'config'),
-            description='Directory containing vision.yaml / vision_local.yaml'
+            description='Vision config directory or standalone calibration YAML override file'
         ),
         # Declare every parameter exposed through `ros2 launch brain launch.py name:=value` and process it in handle_configuration.
         DeclareLaunchArgument(

@@ -234,6 +234,10 @@ public:
     // T2 timestamped head pose; legacy /head_pose remains as a compatibility entry point.
     void headPoseStampedCallback(const geometry_msgs::msg::PoseStamped &msg);
 
+    // VisionNode publishes the head/camera-link pose after applying the
+    // automatic-calibration robot-model adapter; camera.extrin is applied here.
+    void headPoseTfCallback(const geometry_msgs::msg::TransformStamped &msg);
+
     // Process odometry messages.
     void odometerCallback(const booster_interface::msg::Odometer &msg);
 
@@ -455,6 +459,7 @@ private:
     rclcpp::Subscription<vision_interface::msg::SegmentationResult>::SharedPtr segmentationResultSubscription;
     rclcpp::Subscription<geometry_msgs::msg::Pose>::SharedPtr headPoseSubscription;
     rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr headPoseStampedSubscription;
+    rclcpp::Subscription<geometry_msgs::msg::TransformStamped>::SharedPtr headPoseTfSubscription;
     rclcpp::Subscription<booster_interface::msg::RawBytesMsg>::SharedPtr recoveryStateSubscription;
     rclcpp::Publisher<booster_msgs::msg::RpcReqMsg>::SharedPtr modeQueryPublisher_;
     rclcpp::Subscription<booster_msgs::msg::RpcRespMsg>::SharedPtr locoApiResponseSubscription_;
@@ -519,6 +524,7 @@ private:
     };
     bool cameraTransformValid_ = false;
     std::atomic<bool> timestampedHeadPoseSeen_{false};
+    std::atomic<bool> visionCameraTransformSeen_{false};
     // Set when the configured depth stride cannot produce enough samples to
     // satisfy the occupancy threshold. The main tick uses it to avoid
     // resurrecting a stale obstacle after the depth callback clears it.

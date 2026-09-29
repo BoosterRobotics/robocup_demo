@@ -102,7 +102,11 @@ field_marker_pose_estimator:
   refine: false
   line_segment_area_threshold: 75
 calibration:
-  sync_max_time_diff_ms: 40
+  sync_max_time_diff_ms: 80
+  # false: camera.extrin is the complete camera-to-head transform.
+  # true: camera.extrin is the residual transform and the nominal camera pose
+  # is recovered from the robot model and /head_pose_stamped.
+  auto_calibrate: false
   offset:
     exclude_distance: 2.0
     zero_translation: true

@@ -3,6 +3,7 @@
 #include <memory>
 #include <map>
 #include <string>
+#include <vector>
 #include <atomic>
 #include <chrono>
 #include <cstdint>
@@ -45,7 +46,7 @@ public:
 
     [[nodiscard]] bool Init(
         const std::string &cfg_template_path,
-        const std::string &cfg_path);
+        const std::vector<std::string> &cfg_paths);
     void ColorCallback(const sensor_msgs::msg::Image::ConstSharedPtr &msg);
     void CameraInfoCallback(const sensor_msgs::msg::CameraInfo::ConstSharedPtr msg);
     void SegmentationCallback(const sensor_msgs::msg::Image::ConstSharedPtr &msg);
@@ -60,6 +61,7 @@ private:
     enum class IntrinsicsSource {
         kWaiting,
         kYamlFallback,
+        kCalibratedYaml,
         kTopic,
     };
 
@@ -116,6 +118,14 @@ private:
     Pose p_eye2head_;
     Pose p_headprime2head_;
     Pose p_previous_head2base_;
+    bool auto_calibrate_ = false;
+    bool auto_calibrate_pose_ready_ = false;
+    // /head_pose_stamped reports this head point relative to the robot base.
+    // The value is shared by the T2 motion-state publisher configuration.
+    Pose p_headpoint2pitchlink_{0.0613f, 0.0f, 0.108f, 0.0f, 0.0f, 0.0f};
+    Pose p_camera_link2pitchlink_;
+    std::string auto_calibrate_robot_model_;
+    std::string auto_calibrate_camera_link_;
     std::mutex camera_extrinsics_mutex_;
     float z_compensation_ = 0;
     float ball_x_compensation_ = 0;
@@ -186,6 +196,9 @@ private:
     std::shared_ptr<YoloV8Segmentor> segmentor_;
     std::shared_ptr<PoseEstimator> pose_estimator_;
     std::map<std::string, std::shared_ptr<PoseEstimator>> pose_estimator_map_;
+
+    bool InitAutoCalibrationPoseAdapter(const YAML::Node &node);
+    Pose AdaptHeadPoseForAutoCalibration(const Pose &headpoint2base) const;
 };
 
 } // namespace booster_vision
