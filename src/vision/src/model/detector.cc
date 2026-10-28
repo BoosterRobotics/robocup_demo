@@ -3,10 +3,9 @@
 #include <stdexcept>
 #include <filesystem>
 
-#ifdef NO_CUDA
-#include "booster_vision/model/onnx/detection_impl.h"
-#else
 #include "booster_vision/model/trt/impl.h"
+#ifdef ENABLE_ONNX
+#include "booster_vision/model/onnx/detection_impl.h"
 #endif
 
 namespace booster_vision {
@@ -21,11 +20,13 @@ std::shared_ptr<YoloV8Detector> YoloV8Detector::CreateYoloV8Detector(const YAML:
         float nms_thresh = node["nms_threshold"].as<float>();
 
         std::shared_ptr<YoloV8Detector> detector_ptr = nullptr;
-        #ifdef NO_CUDA
-        // Use ONNX when CUDA is not available
-        detector_ptr = std::shared_ptr<YoloV8Detector>(new YoloV8DetectorONNX(model_path));
+        #ifdef ENABLE_ONNX
+        if (model_path.find(".onnx") != std::string::npos) {
+            detector_ptr = std::shared_ptr<YoloV8Detector>(new YoloV8DetectorONNX(model_path));
+        } else {
+            detector_ptr = std::shared_ptr<YoloV8Detector>(new YoloV8DetectorTRT(model_path));
+        }
         #else
-        // Use TensorRT when CUDA is available
         detector_ptr = std::shared_ptr<YoloV8Detector>(new YoloV8DetectorTRT(model_path));
         #endif
         if (detector_ptr) {

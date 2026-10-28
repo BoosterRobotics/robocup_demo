@@ -1,4 +1,4 @@
-<!-- Find ball behavior tree -->
+<!-- 摄像头跟踪球 -->
 
 <root BTCPP_format="4" >
   <BehaviorTree ID="FindBall">

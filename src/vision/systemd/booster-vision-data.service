@@ -1,0 +1,19 @@
+[Unit]
+Description=Booster Vision Data Storage Service (Python)
+After=network.target
+StartLimitInterval=60
+StartLimitBurst=5
+
+[Service]
+ExecStartPre=/bin/sleep 1
+ExecStartPre=/bin/mkdir -p /mnt/vision_data
+ExecStartPre=/bin/sh -c 'mountpoint -q /mnt/vision_data || /bin/mount -t nfs 192.168.200.251:/volume1/vision_data /mnt/vision_data'
+ExecStart=/usr/bin/python3 /opt/booster/vision/move_data_to_storage.py
+User=root
+Group=root
+WorkingDirectory=/home/booster
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

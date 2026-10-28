@@ -1,0 +1,24 @@
+<!-- 用于演示追球 -->
+
+<root BTCPP_format="4" >
+    <include path="./subtrees/subtree_cam_find_and_track_ball.xml" />
+
+     <BehaviorTree ID="MainTree">
+        <Sequence name="root">
+            <ReactiveSequence>
+               <SubTree ID="CamFindAndTrackBall" _autoremap="true" _while="control_state>=2" />
+               <Sequence _while="control_state==3" >
+                  <Sequence _while="!ball_location_known" >
+                     <PlaySound sound="search" />
+                     <RobotFindBall vyaw_limit="1.5" />
+                  </Sequence>
+                  <Sequence _while="ball_location_known" >
+                     <SimpleChase  stop_dist="1.0" stop_angle="0.3" />
+                     <PlaySound sound="playful" _while="ball_range>=1.5" />
+                     <PlaySound sound="exited" _while="ball_range<1.0" />
+                  </Sequence>
+               </Sequence>
+            </ReactiveSequence>
+        </Sequence>
+     </BehaviorTree>
+</root>

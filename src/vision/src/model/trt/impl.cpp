@@ -467,20 +467,20 @@ bool PreProcess(const cv::Mat& img, const long int* model_input_shape, float* in
     int rc = img.channels();
 
     cv::cvtColor(img, mat, cv::COLOR_BGR2RGB);
-    int max_img_len = std::max(rw, rh);  // use std::max for clarity
+    int max_img_len = std::max(rw, rh);  // 使用std::max以清晰
     const int model_input_width = model_input_shape[0];
     const int model_input_height = model_input_shape[1];
     assert(model_input_width == 640 && "model_input_width must be 640");
-    assert(model_input_width == model_input_height && "model must be square input");  // add assertion to ensure square
+    assert(model_input_width == model_input_height && "model must be square input");  // 添加断言确保方形
 
     float factor = static_cast<float>(max_img_len) / model_input_width;
     factors.emplace_back(factor);
-    factors.emplace_back(factor);  // unify factors to maintain aspect ratio
+    factors.emplace_back(factor);  // 统一因子，保持纵横比
 
-    // use gray padding (114,114,114)
+    // 使用灰色填充（114,114,114）
     cv::Mat max_img(max_img_len, max_img_len, CV_8UC3, cv::Scalar(114, 114, 114));
     cv::Rect roi(0, 0, rw, rh);
-    mat.copyTo(max_img(roi));  // copy to top-left corner, fill the bottom/right
+    mat.copyTo(max_img(roi));  // 拷贝到左上角，填充在底部/右侧
 
     cv::Mat resized_img;
     cv::resize(max_img, resized_img, cv::Size(model_input_width, model_input_width), 0.0f, 0.0f, cv::INTER_LINEAR);
@@ -502,27 +502,27 @@ cv::Rect ProcessBoundingBox(const float* data, const std::vector<float>& factors
     float w = data[2];
     float h = data[3];
 
-    // calculate initial values (may be negative or exceed image boundaries)
+    // 计算初始值（可能负或超出）
     int left = static_cast<int>((x - 0.5f * w) * factors[0]);
     int top = static_cast<int>((y - 0.5f * h) * factors[1]);
     int width = static_cast<int>(w * factors[0]);
     int height = static_cast<int>(h * factors[1]);
 
-    // clip left/top to >=0
+    // 裁剪left/top到>=0
     int clipped_left = std::max(0, left);
     int clipped_top = std::max(0, top);
 
-    // calculate exclusive right/bottom boundary
-    int clipped_right = std::min(img_width, left + width);  // exclusive right boundary
-    int clipped_bottom = std::min(img_height, top + height);  // exclusive bottom boundary
+    // 计算独占右/下边界，并裁剪到img_width/img_height
+    int clipped_right = std::min(img_width, left + width);  // 独占右边界
+    int clipped_bottom = std::min(img_height, top + height);  // 独占下边界
 
-    // calculate new width/height after clipping
+    // 计算新宽度/高度
     int new_width = clipped_right - clipped_left;
     int new_height = clipped_bottom - clipped_top;
 
-    // Check if the box is valid
+    // 检查是否有效
     if (new_width <= 0 || new_height <= 0 || new_width < 3 || new_height < 3) {
-        return cv::Rect(0, 0, 0, 0);  // invalid box
+        return cv::Rect(0, 0, 0, 0);  // 无效
     }
 
     return cv::Rect(clipped_left, clipped_top, new_width, new_height);

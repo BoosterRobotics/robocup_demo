@@ -3,6 +3,10 @@
 #include <memory>
 #include <map>
 #include <string>
+#include <chrono>
+#include <cstdint>
+#include <shared_mutex>
+#include <vector>
 
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/image.hpp>
@@ -35,24 +39,34 @@ class SyncedDataBlock;
 
 class VisionNode : public rclcpp::Node {
 public:
-    VisionNode(const std::string &node_name, const rclcpp::NodeOptions &options = rclcpp::NodeOptions());
+    VisionNode(const std::string &node_name);
     ~VisionNode() = default;
 
     void Init(const std::string &cfg_template_path, const std::string &cfg_path);
     void ColorCallback(const sensor_msgs::msg::Image::ConstSharedPtr &msg);
-    void CompressedColorCallback(const sensor_msgs::msg::CompressedImage::SharedPtr msg);
+    void CameraInfoCallback(const sensor_msgs::msg::CameraInfo::SharedPtr msg);
     void SegmentationCallback(const sensor_msgs::msg::Image::ConstSharedPtr &msg);
-    void CompressedSegmentationCallback(const sensor_msgs::msg::CompressedImage::SharedPtr msg);
     void DepthCallback(const sensor_msgs::msg::Image::ConstSharedPtr &msg);
-    void CompressedDepthCallback(const sensor_msgs::msg::CompressedImage::SharedPtr msg);
     void PoseTFCallBack(const geometry_msgs::msg::TransformStamped::SharedPtr msg);
     void PoseCallBack(const geometry_msgs::msg::Pose::SharedPtr msg);
     void CalParamCallback(const vision_interface::msg::CalParam::SharedPtr msg);
-    void CameraInfoCallback(const sensor_msgs::msg::CameraInfo::SharedPtr msg);
     void ProcessData(SyncedDataBlock &synced_data, vision_interface::msg::Detections &detections);
     void ProcessSegmentationData(SyncedDataBlock &synced_data, vision_interface::msg::LineSegments &field_line_segs_msg);
 
 private:
+    enum class IntrinsicsSource {
+        kWaiting,
+        kYamlFallback,
+        kTopic,
+    };
+
+    bool EnsureIntrinsicsReady();
+    void ActivateYamlIntrinsicsIfTimedOut();
+    void ApplyRuntimeIntrinsics(const Intrinsics &intrinsics, IntrinsicsSource source,
+                                uint32_t image_width = 0, uint32_t image_height = 0);
+    void UpdateActiveCameraImageSize(uint32_t image_width, uint32_t image_height);
+    void UpdatePoseEstimatorIntrinsicsLocked();
+
     bool use_depth_ = false;
     bool show_det_ = false;
     bool show_seg_ = false;
@@ -65,12 +79,21 @@ private:
     int save_cnt_ = 0;
     int save_every_n_frame_ = 0;
 
-    std::string color_topic_;
-    std::string depth_topic_;
-    std::string intrin_topic_;
+    std::string camera_type_;
     std::string img_log_path_;
 
     Intrinsics intr_;
+    Intrinsics yaml_intr_;
+    IntrinsicsSource intrinsics_source_{IntrinsicsSource::kWaiting};
+    std::string camera_info_topic_{"/boostercamera/head/rgb/camera_info"};
+    double intrinsics_wait_timeout_sec_{3.0};
+    uint32_t active_camera_image_width_{0};
+    uint32_t active_camera_image_height_{0};
+    uint32_t camera_info_width_{0};
+    uint32_t camera_info_height_{0};
+    std::chrono::steady_clock::time_point intrinsics_wait_start_;
+    mutable std::shared_mutex intrinsics_mutex_;
+    rclcpp::TimerBase::SharedPtr intrinsics_fallback_timer_;
     Pose p_eye2head_;
     Pose p_headprime2head_;
     Pose p_previous_head2base_;
@@ -103,12 +126,9 @@ private:
     image_transport::Subscriber color_sub_;
     image_transport::Subscriber depth_sub_;
     image_transport::Subscriber color_seg_sub_;
-    rclcpp::Subscription<sensor_msgs::msg::CompressedImage>::SharedPtr compressed_color_sub_;
-    rclcpp::Subscription<sensor_msgs::msg::CompressedImage>::SharedPtr compressed_depth_sub_;
-    rclcpp::Subscription<sensor_msgs::msg::CompressedImage>::SharedPtr compressed_color_seg_sub_;
+    rclcpp::Subscription<sensor_msgs::msg::CameraInfo>::SharedPtr camera_info_sub_;
     rclcpp::Subscription<geometry_msgs::msg::Pose>::SharedPtr pose_sub_;
     rclcpp::Subscription<vision_interface::msg::CalParam>::SharedPtr calParam_sub_; // Sub for calibration params
-    rclcpp::Subscription<sensor_msgs::msg::CameraInfo>::SharedPtr camera_info_sub_;
 
     rclcpp::CallbackGroup::SharedPtr callback_group_sub_1_;
     rclcpp::CallbackGroup::SharedPtr callback_group_sub_2_;
@@ -124,8 +144,6 @@ private:
     std::shared_ptr<YoloV8Segmentor> segmentor_;
     std::shared_ptr<PoseEstimator> pose_estimator_;
     std::map<std::string, std::shared_ptr<PoseEstimator>> pose_estimator_map_;
-    
-    YAML::Node config_node_;  // Store config for recreating pose estimators
 };
 
 } // namespace booster_vision

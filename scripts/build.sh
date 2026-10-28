@@ -3,11 +3,9 @@
 cd `dirname $0`
 cd ..
 
-source /opt/ros/humble/setup.bash
+export PYTHONWARNINGS="ignore::DeprecationWarning,ignore::UserWarning,ignore::FutureWarning"
 
-# export PYTHONWARNINGS="ignore::DeprecationWarning,ignore::UserWarning,ignore::FutureWarning"
-# Use --base-paths to only build packages in src directory
-# This excludes booster_agent_framework to avoid duplicate package name 'booster_interface'
-colcon build --parallel-workers $(nproc) --base-paths src "$@"
+# colcon build  --symlink-install  --parallel-workers $(nproc) "$@"
+colcon build --parallel-workers $(nproc) "$@"
 
 espeak "build complete" >/dev/null 2>&1 || echo "Build complete"

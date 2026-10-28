@@ -1,132 +1,198 @@
 brain_node:
   ros__parameters:
     game:
-      team_id: 66 # must be consistent with GameControl
+      team_id: 70 # consistant with GameControl
       player_id: 1 # 1 | 2 | 3 | 4 | 5
-      field_type: "adult_size" # adult_size | kid_size | robo_league
-      player_role: "striker" # striker | goal_keeper
-      treat_person_as_robot: false
-      number_of_players: 3
+      field_type: "robo_league" # adult_size | kid_size | robo_league
+      player_role: "goal_keeper" # striker | goal_keeper
+      player_start_pos: "right" # right | left
+      treat_person_as_robot: false # 是否将人类视为机器人, 用于调试. !!!! 正式比赛时, 必须设置为 false !!!!
+      number_of_players: 5
+    
+    ball_predictor: 
+      step_interval: 100. 
+      step_cnt: 50 
+      acceleration: -0.35
+      speed_friction_factor: 0.45
       
     robot:
-      robot_name: "" # When multiple robots exist, specify e.g. "robot0", "robot1"; leave empty for single robot
-      robot_height: 0.8 # 1.12 for T1
-      odom_factor: 0.8 # 1.2 for T1
-      vx_factor: 0.50
-      yaw_offset: 0.0
-      vx_limit: 1.0
-      vy_limit: 0.4
-      vtheta_limit: 1.2
-      min_vx: 0.3 # Minimum x velocity when command is too small, to prevent no response
-      min_vy: 0.3 # Minimum y velocity when command is too small, to prevent no response
-      min_vtheta: 0.25 # Minimum theta velocity when command is too small, to prevent no response
+      robot_height: 0.90 
+      odom_factor: 1.0 
+      vx_factor: 0.90 
+      yaw_offset: 0.0 
+      vx_limit: 1.6
+      vy_limit: 0.8
+      vtheta_limit: 1.5 
 
     strategy:
-      ball_confidence_threshold: 50.0
-      ball_memory_timeout: 2.0
-      tm_ball_dist_threshold: 2.0
-      limit_near_ball_speed: false
-      near_ball_speed_limit: 0.2
-      near_ball_range: 3.0
-      abort_kick_when_ball_moved: true
-      soft_kickoff: false
+      ball_confidence_threshold: 60.0 
+      ball_confidence_decay_rate: 3.0 
+      enable_stable_kick: false 
+      ball_memory_timeout: 3.0 
+      ball_lost_msecs: 1000.0
+      tm_ball_dist_threshold: 1.5  
+      limit_near_ball_speed: false 
+      near_ball_speed_limit: 0.6 
+      near_ball_range: 2.0 
+      soft_kickoff: true          # 所有开球(比赛开球/任意球/角球/门球)均用软速度，降低出界/失误风险
       soft_kickoff_speed: 0.3
-      ball_out_threshold: 2.0
-      freekick_kicker_touch:
-        enable: true
-        close_dist: 0.40
-        release_dist: 0.70
-        cost_penalty: 100.0
-        cost_penalty_msecs: 5000.0
-      freekick_defense:
-        exit_margin: 0.25 # 非开球方任意球时，只比规则避让半径多退一点，减少退得过远
-        primary_buffer: 0.00 # 主力默认停在避让半径外一点
-        goal_kick_primary_buffer: 0.00 # 门球时同样只退出避让半径
-        secondary_buffer: 0.15 # 第二防守点只略微更远，主要靠横向展开
-        secondary_lateral_offset: 0.35 # 第二防守点沿切线方向的横向展开距离
-        field_margin_x: 0.35 # 站位点距底线/边界的最小 X 安全边距
-        field_margin_y: 0.60 # 站位点距边线的最小 Y 安全边距
-        own_penalty_exit_margin: 0.20 # 当任意球发生在本方禁区内时，额外退到禁区外的安全边距
-        opponent_goal_kick_penalty_exit_margin: 0.50 # 对方门球时，防守方目标点位于对方大禁区线外 0.5m
-        opponent_goal_kick_ball_clearance: 0.70 # 对方门球退让路径与球至少保持 0.7m 安全半径
-        arrive_dist_tolerance: 0.25 # 防守任意球认为已到位的距离阈值
-        arrive_theta_tolerance: 0.14 # 防守任意球认为已到位的朝向阈值，保证始终盯球
-        ball_clearance: 0.30 # 防守任意球时任何贴球/回场动作至少保持 30cm
-        path_ball_clearance: 0.30 # 移动路径与球过近时，强制优先后退/绕开的距离阈值
-        goal_line_exception_x_margin: 0.20 # 球门线例外：判定机器人在本方球门线附近的 X 容差
-        goal_line_exception_y_margin: 0.10 # 球门线例外：判定机器人在两门柱之间的额外 Y 容差
-        fast_exit_back_speed: 0.55 # 仍在安全圈内时，优先正对球后退的目标速度
-        fast_exit_release_margin: 0.04 # 快速退圈模式的释放边距，刚出避让半径就停止继续后退
-        fast_exit_turn_gain: 2.20 # 快速退圈时朝向球的转向增益
-        fast_exit_max_lateral: 0.08 # 快速退圈时允许的最大侧向修正，默认尽量少横移
-        fast_exit_path_ball_clearance: 0.30 # 快速退圈阶段至少保持 30cm，不再因为过大路径阈值退得很远
-        boundary_arc_speed: 0.75 # 退到合法半径后，沿避让圆弧快速移动到最佳站位的速度上限
-        boundary_arc_radius_margin: 0.06 # 圆弧移动时相对避让半径保留的额外安全边距
-        boundary_arc_step: 0.55 # 每次圆弧切向追踪的最大角度步长，越大越果断
-        boundary_arc_min_angle: 0.10 # 角度差超过该值时优先沿圆弧切向移动
-        boundary_arc_direct_dist: 0.45 # 距离最佳点仍超过该值时，即使角度差不大也用快速边界移动
+      kick_range: 1.0 
+      kick_theta_range: 0.2 
+      abort_kick_when_ball_moved: true 
+      abort_kick_ball_move_threshold: 0.3 
+      abort_shoot_when_ball_moved: true  
+      limit_speed_near_border: false 
+      near_border_speed_limit: 0.5
+      near_border_dist_threshold: -1.0 
+      enable_bypass: false 
+      enable_shoot: false 
+      enable_directional_kick: false 
+      goalie_visual_kick_cooldown_ms: 600.0
+      goalie_visual_kick_max_ball_range: 5.0
+      goalie_visual_kick_max_direction_error: 1.2 # 守门员启动视觉踢球前，球方向与解围方向的最大误差(rad)
+      goalie_simple_x_kp: 0.9
+      goalie_simple_y_kp: 2.2
+      goalie_simple_threat_vxf: -0.03
+      goalie_simple_predict_min_vxf: 0.06
+      goalie_simple_t_goal_max: 8.0
+      goalie_simple_t_plane_min: 0.02
+      goalie_simple_t_plane_max: 6.0
+      goalie_simple_vy_max: 0.8
+      goalie_simple_vx_max: 1.2
+      goalie_simple_vtheta_kp: 1.4
+      goalie_simple_vtheta_limit: 1.5
+      shoot:
+        threat_threshold: -2.0 
+        xmin: 0.3
+        xmax: 0.6
+        ymin: -0.3
+        ymax: 0.3
+
+      power_shoot:
+        enable: true 
+        use_for_kickoff: false 
+        xmin: 0.2 
+        xmax: 1.0 
+        ymin: -0.3 
+        ymax: 0.3 
+      enable_auto_visual_kick: true
+      auto_visual_kick_enable_dist_min: 0.05 # 避免将本体的部分识别为球
+      auto_visual_kick_enable_dist_max: 5.0
+      auto_visual_kick_enable_angle: 1.5
+      auto_visual_kick_max_direction_error: 1.8 # 未对准期望踢球方向时继续 Adjust，不直接进入 VisualKick
+      auto_visual_kick:
+        real_ball_hold_ms: 1000.0
+        current_real_ball_max_age_ms: 650.0
+        near_ball_memory_reject_range: 0.45
+        allow_predicted_kick_msg: true
+        allow_memory_kick_msg: true
+        kick_msg_real_ball_max_age_ms: 650.0
+        no_detection_kick_msg_reject_range: 0.45
+        startup_decelerate_ms: 80.0
+        exit_decelerate_ms: 140.0
+        max_parallel_count: 1
+        yield_my_cost_min: 4.0
+        no_progress_timeout_ms: 3500.0
+        progress_range_delta: 0.12
+        progress_ball_forward_delta: 0.15
+        max_total_ms: 14000.0
+        max_extra_rounds: 1
       cooperation:
-        enable_role_switch: false
-        ball_control_cost_threshold: 20.0
+        enable_role_switch: true 
+        ball_control_cost_threshold: 5.0 
+        goalie_comm_fresh_msecs: 2200.0
+        goalie_comm_stable_msecs: 1000.0
+        goalie_distance_tie_margin: 0.15
+        goalie_fallback_use_gc_goalie: true # 通信暂时不完整时优先沿用裁判机守门员，避免错误球员跑向门前
+        goalie_attack_handoff: true
+      far_set_play_search:
+        enable: true                 # 任一方门球/角球很远且看不到球时，先去球应出现的半场搜索
+        trigger_x: 0.5               # 越过中线至少 0.5 m 才算进入目标半场，避免在中线附近反复切换
+        field_target_x_ratio: 0.25   # 场上机器人搜索目标 |x| = 场长 * 此比例
+        lane_y_ratio: 0.28           # 按 player_id 分配横向搜索通道
+        max_move_secs: 30.0
+        vx_limit: 0.7
+        vy_limit: 0.4
+      set_play_stand:
+        corridor_half_width: 0.6     # 我方角球/门球时，判断是否挡住开球通道的半宽 (m)
+        corridor_forward_range: 3.0  # 开球通道沿 kickDir 方向的有效长度 (m)
+        side_margin: 0.2             # 让位时在通道边缘外再留出的余量 (m)
 
     obstacle_avoidance:
-      depth_sample_step: 16
-      obstacle_min_height: 0.45
-      grid_size: 0.2
-      max_x: 3.0
-      max_y: 5.0
-      exclusion_x: 0.4
-      exclusion_y: 0.5
-      ball_exclusion_radius: 0.0
-      ball_exclusion_height: 0.3
-      occupancy_threshold: 2000.0
-      collision_threshold: 0.3
-      safe_distance: 2.0
-      avoid_secs: 3.0
-      enable_freekick_avoid: false
-      freekick_start_placing_safe_distance: 0.1
-      freekick_start_placing_avoid_secs: 2.5
-      obstacle_memory_msecs: 500.0
-      avoid_during_kick: false
-      kick_ao_safe_dist: 3.0
-      avoid_during_chase: true
-      chase_ao_safe_dist: 3.5
+      depth_sample_step: 16 
+      obstacle_min_height: 0.3 
+      grid_size: 0.2 
+      max_x: 3.0 
+      max_y: 5.0 
+      exclusion_x: 0.4 
+      exclusion_y: 0.5 
+      ball_exclusion_radius: 0.0 
+      ball_exclusion_height: 0.3 
+      occupancy_threshold: 20 
+      collision_threshold: 0.3 
+      safe_distance: 1.0 
+      avoid_secs: 2.0 
+      enable_freekick_avoid: true 
+      freekick_start_placing_safe_distance: 0.5 
+      freekick_start_placing_avoid_secs: 1.5 
+      obstacle_memory_msecs: 500. 
+      avoid_during_kick: false 
+      kick_ao_safe_dist: 1.5 
+      kick_ao_use_shoot: false 
+      avoid_during_chase: false 
+      chase_ao_safe_dist: 1.5 
+      always_turn_left: false 
 
     RLVisionKick:
-      enableAutoVisualKick: true
-      autoVisualKickEnableDistMin: 0.2
-      autoVisualKickEnableDistMax: 4.0
-      autoVisualKickEnableAngle: 0.8
-      lowPassPower: 1.8
-      highPassPower: 2.5
-      visualKickVersion: kV2  # kV1|kV2
+      visual_kick_version: kV2 # kV1 | kV2 修改此参数可更改visualkick调用版本
+      goalie_clearance_power: 2.5
 
     locator:
-      min_marker_count: 5
-      max_residual: 0.35
+      min_marker_count: 4
+      max_residual: 0.4
 
-    enable_com: true
-    team_comm_frequency_hz: 1.0  # 队内通信广播频率(Hz)，默认 2Hz；RoboCup 规则上限 2 包/秒，超过会告警但仍生效
+    enable_com: True  # 是否开启队友间通信，建议打开
+
+    rerunLog:
+      enable_tcp: false # 是否通过网络传输 log
+      server_ip: "192.168.10.110:9876" # 开启了 rerun Viewer 的机器地址
+      enable_file: true # 是否将 log 写入本地,加入默认扫场
+      log_dir: "/home/booster/Workspace/rrlog" # 本地 log 存储路径, 会在此路径下生成以时间为开头的文件
+      max_log_file_mins: 5.0 # 本地 log 最长多少分钟就分片存储. 太大的文件会导致读的时候死机.
+      img_interval: 1 #每多少帧图像 log 一次, 如果希望更好的实时性或减少日志大小, 可以调高这个值. 但会造成 log 的时间精度降低.
     
     recovery:
       retry_max_count: 2
+      get_up_version: kV2 # kV1 | kV2
 
     vision:
-        # image_camera_info_topic: "/camera/camera/color/camera_info" # realsense
-        # depth_image_topic: "/camera/camera/aligned_depth_to_color/image_raw" # realsense
-        # depth_camera_info_topic: "/camera/camera/aligned_depth_to_color/camera_info" # realsense
+      image_topic: "/boostercamera/head/rgb" #相机topic统一命名，topic名称不需更改
+      depth_image_topic: "/boostercamera/head/depth" #相机topic统一命名，topic名称不需更改
+      # cam_pixel_width: 544. # 相机像素宽度, d-robotics
+      # cam_pixel_height: 448. # 相机像素高度, d-robotics
+      cam_pixel_width: 1280. # 相机像素宽度 realsense
+      cam_pixel_height: 720. # 相机像素高度 realsense
+      cam_fov_x: 90.0 # 相机视场角, 单位: 度 realsense
+      cam_fov_y: 60.0 # 相机视场角, 单位: 度 realsense
+      # cam_fov_x: 105.0 # 相机视场角, 单位: 度, d-robotics,debug
+      # cam_fov_y: 94.0 # 相机视场角, 单位: 度, d-robotics,debug  
 
-        # image_camera_info_topic: "/zed/zed_node/left/camera_info" # zed
-        # depth_image_topic: "/zed/zed_node/depth/depth_registered" # zed
-        # depth_camera_info_topic: "/zed/zed_node/depth/camera_info" # zed
-
-        image_camera_info_topic: "/boostercamera/head/rgb/camera_info" # d-robotics
-        depth_image_topic: "/boostercamera/head/depth" # d-robotics
-        depth_camera_info_topic: "/boostercamera/head/depth/camera_info" # d-robotics
-
-        
-        # image_camera_info_topic: "/camera/robot0_rgbd_camera/rgb/camera_info" # simulated
-        # depth_image_topic: "/camera/robot0_rgbd_camera/depth/image_raw" # simulated
-        # depth_camera_info_topic: "/camera/robot0_rgbd_camera/depth/camera_info" # simulated
+    debug:
+      log_ball_pos: false # 是否记录球位置到 ballpos.log 中, 用于调试
+      low_frequency_status:
+        enable: true # 低频输出机器人位姿、球状态、比赛状态和 ASCII 场地图
+        mode_enable: true # 通过 LocoApi GetMode(2017) 异步查询当前机器人模式
+        field_ascii_enable: true # 输出按场地坐标绘制的 ASCII 场地图
+        log_interval_ms: 2000.0 # 位姿/球/比赛状态摘要间隔
+        mode_query_interval_ms: 2000.0 # SDK mode 查询间隔
+        mode_query_timeout_ms: 1000.0 # 单次 SDK mode 查询超时
+        field_ascii_interval_ms: 5000.0 # ASCII 场地图输出间隔
+        field_ascii_char_aspect: 2.0 # 终端字符高宽比修正
+        field_ascii_width: 45 # ASCII 场地图内部宽度
     
-    game_control_ip: "192.168.30.170"
+    game_control_ip: "172.169.80.24"  # 更改为具体的裁判机的 IP 地址
+
+    # for fun
+    sound:
+      enable: true 
+      sound_pack: "espeak" 

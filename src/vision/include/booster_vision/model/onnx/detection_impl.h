@@ -9,7 +9,7 @@
 
 #include <opencv2/opencv.hpp>
 
-#include <onnxruntime_cxx_api.h>
+#include <onnxruntime/onnxruntime_cxx_api.h>
 
 namespace booster_vision {
 
@@ -36,7 +36,7 @@ private:
     ONNXTensorElementDataType element_type_;
     void* data_buffer_ = nullptr;
 
-    cv::Size model_input_size_ = {640, 640};  // Will be overridden by model's actual input size
+    cv::Size model_input_size_ = {640, 640};
 };
 
 } // namespace booster_vision

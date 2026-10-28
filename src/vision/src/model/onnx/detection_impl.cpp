@@ -84,49 +84,7 @@ void YoloV8DetectorONNX::Init(std::string model_path) {
         session_option.SetIntraOpNumThreads(1);
         session_option.SetLogSeverityLevel(3);
 
-        // Try to enable hardware acceleration providers in order: OpenVINO (Intel GPU) > CUDA > CPU
-        std::vector<std::string> available_providers = Ort::GetAvailableProviders();
-        bool provider_added = false;
-        
-        // Try OpenVINO for Intel integrated GPU
-        if (std::find(available_providers.begin(), available_providers.end(), "OpenVINOExecutionProvider") != available_providers.end()) {
-            try {
-                OrtOpenVINOProviderOptions openvino_options;
-                openvino_options.device_type = "GPU_FP32";  // Use Intel GPU with FP32 precision
-                // openvino_options.device_type = "GPU_FP16";  // Uncomment for FP16 (faster but less precise)
-                session_option.AppendExecutionProvider_OpenVINO(openvino_options);
-                std::cout << "[Detection] OpenVINO Execution Provider enabled (Intel GPU)" << std::endl;
-                provider_added = true;
-            } catch (const std::exception &e) {
-                std::cout << "[Detection] OpenVINO EP failed: " << e.what() << ", falling back..." << std::endl;
-            }
-        }
-        
-        // Try CUDA for NVIDIA GPU
-        if (!provider_added && std::find(available_providers.begin(), available_providers.end(), "CUDAExecutionProvider") != available_providers.end()) {
-            try {
-                OrtCUDAProviderOptions cuda_options;
-                cuda_options.device_id = 0;
-                session_option.AppendExecutionProvider_CUDA(cuda_options);
-                std::cout << "[Detection] CUDA Execution Provider enabled (NVIDIA GPU)" << std::endl;
-                provider_added = true;
-            } catch (const std::exception &e) {
-                std::cout << "[Detection] CUDA EP failed: " << e.what() << ", falling back to CPU" << std::endl;
-            }
-        }
-        
-        if (!provider_added) {
-            std::cout << "[Detection] Using CPU Execution Provider" << std::endl;
-        }
-
         session_ = std::make_shared<Ort::Session>(env_, model_path.c_str(), session_option);
-
-        // Get input shape from model
-        auto input_shape = session_->GetInputTypeInfo(0).GetTensorTypeAndShapeInfo().GetShape();
-        if (input_shape.size() == 4) {
-            model_input_size_ = {static_cast<int>(input_shape[3]), static_cast<int>(input_shape[2])};
-            std::cout << "Model input size: " << model_input_size_.width << "x" << model_input_size_.height << std::endl;
-        }
 
         element_type_ = session_->GetInputTypeInfo(0).GetTensorTypeAndShapeInfo().GetElementType();
         // allocate data buffer based on input tensor element type
@@ -215,13 +173,6 @@ std::vector<booster_vision::DetectionRes> YoloV8DetectorONNX::InferenceImpl(cons
 
     float *data = (float *)raw_data.data;
 
-    float resize_scales;
-    if (img_width >= img_height) {
-        resize_scales = img_width / (float)model_input_size_.width;
-    } else {
-        resize_scales = img_height / (float)model_input_size_.width;
-    }
-
     for (int i = 0; i < stride_num; ++i) {
         float *classesScores = data + 4;
         // TODO: use normal member instead of static number
@@ -235,6 +186,8 @@ std::vector<booster_vision::DetectionRes> YoloV8DetectorONNX::InferenceImpl(cons
             float w = data[2];
             float h = data[3];
 
+            // TODO: fix magic number
+            int resize_scales = 2;
             int left = int((x - 0.5 * w) * resize_scales);
             int top = int((y - 0.5 * h) * resize_scales);
 

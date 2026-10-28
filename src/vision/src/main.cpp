@@ -8,11 +8,7 @@ int main(int argc, char **argv) {
     rclcpp::init(argc, argv);
 
     std::string node_name = "vision_node";
-    
-    rclcpp::NodeOptions options;
-    options.use_intra_process_comms(true);
-    
-    auto node = std::make_shared<booster_vision::VisionNode>(node_name, options);
+    auto node = std::make_shared<booster_vision::VisionNode>(node_name);
 
     std::string config_template_path = argv[1];
     std::string config_path = "";

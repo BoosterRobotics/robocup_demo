@@ -1,10 +1,6 @@
 #include "booster_vision/model//segmentor.h"
 
-#ifdef NO_CUDA
-#include "booster_vision/model/onnx/segmentation_impl.h"
-#else
 #include "booster_vision/model//trt/impl.h"
-#endif
 
 namespace booster_vision {
 
@@ -15,13 +11,7 @@ std::shared_ptr<YoloV8Segmentor> YoloV8Segmentor::CreateYoloV8Segmentor(const YA
         std::string model_path = model_path_override.empty() ? node["model_path"].as<std::string>() : model_path_override;
         float conf_thresh = node["confidence_threshold"].as<float>();
 
-        #ifdef NO_CUDA
-        // Use ONNX when CUDA is not available
-        return std::shared_ptr<YoloV8Segmentor>(new YoloV8SegmentorONNX(model_path, conf_thresh));
-        #else
-        // Use TensorRT when CUDA is available
         return std::shared_ptr<YoloV8Segmentor>(new YoloV8SegmentorTRT(model_path, conf_thresh));
-        #endif
     } catch (const std::exception &e) {
         std::cerr << e.what() << std::endl;
         return nullptr;

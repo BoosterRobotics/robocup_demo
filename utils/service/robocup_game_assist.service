@@ -1,0 +1,13 @@
+[Unit]
+Description=Booster Robocup Assist  
+After=network.target
+
+[Service]
+Type=forking
+ExecStartPre=/bin/sleep 30
+ExecStart=/bin/bash /home/booster/Workspace/robocup/scripts/start.sh tree:=assist disable_log:=true disable_com:=true
+Restart=never
+RestartSec=5
+
+[Install]
+WantedBy=default.target

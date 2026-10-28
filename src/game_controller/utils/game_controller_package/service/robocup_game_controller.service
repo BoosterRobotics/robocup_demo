@@ -1,0 +1,14 @@
+[Unit]
+Description=Booster GameController Service
+After=network.target
+
+[Service]
+Type=simple
+User=root
+ExecStartPre=/bin/sleep 30
+ExecStart=/bin/bash /opt/robocup/service/start_game_controller.sh
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

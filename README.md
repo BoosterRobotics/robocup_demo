@@ -27,14 +27,6 @@ sudo apt-get update
 sudo apt-get install libasound2-dev libfftw3-dev
 ```
 
-```bash
-# Install onnxruntime (If you want to run without cuda)
-
-./third_party_aarch64/install_onnxruntime.sh # if aarch64
-
-./third_party/install_onnxruntime.sh # if x64
-```
-
 ## RUN ON Booster K1 or T1
 This demo is designed for running on Booster K1, if you'd like to run this demo on Booster T1, few configs need to be updated.
 ### src/brain/config/config.yaml or src/brain/config/config_local.yaml
@@ -65,29 +57,8 @@ vision.yaml for jetpack 6.2 machine
 	    model_path: ./src/vision/model/best_digua_second_10.3.engine
 	    confidence_threshold: 0.2
 
-## Visualization
-booster_soccer.layout can be imported into Booster Studio for inspect logs
-
 ## Build
 
-### Build the programs without cuda (inference with onnx, so you need to run install onnx in advance)
-```bash
-./scripts/build_no_cuda.sh
-```
-#### build error
-if you clone this repo in windows and run in Booster Studio Simulator, you may encounter problems blow
-```bash
-./build_no_cuda.sh 
--bash: ./build_no_cuda.sh: /bin/bash^M: bad interpreter: No such file or directory
-```
-This is caused by difference of Windows and Linux/Unix based system. 
-
-Run cmd below
-```bash
-cd booster_soccer/scripts
-find . -type f -print0 | xargs -0 sed -i 's/\r$//'
-```
-Then run build_no_cuda.sh. 
 
 ### Build the programs with cuda (real robot)
 ```bash
@@ -95,16 +66,6 @@ Then run build_no_cuda.sh.
 ```
 
 ## Run
-### Run on the virtual robot
-#### src/brain/config/config.yaml or src/brain/config/config_local.yaml
-1. set vision.image_camera_info_topic, vision.depth_image_topic, vision.depth_camera_info_topic to corresponding image topic
-#### update src/vision/config/vision.yaml or src/vision/config/vision_local.yaml
-1. set camera.color_topic, camera.depth_topic, camera.intrin_topic to corresponding ones
-2. set detection_model.model_path to ./src/vision/model/sim_data_det_0126.onnx
-3. set segmentation_model.model_path to ./src/vision/model/sim_data_seg_0126.onnx
-```bash
-./scripts/sim_start.sh
-```
 
 ### Run on real robot
 ```bash

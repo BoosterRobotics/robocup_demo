@@ -1,15 +1,10 @@
 #!/bin/bash
-
+echo "[START VISION]"
 cd `dirname $0`
 cd ..
 
-echo "[STOP EXISTING NODES (IF ANY), TO AVOID CONFILICT]"
-./scripts/stop.sh
-
 source ./install/setup.bash
-#export FASTRTPS_DEFAULT_PROFILES_FILE=/opt/booster/BoosterRos2/fastdds_profile_udp_only.xml
+#export FASTRTPS_DEFAULT_PROFILES_FILE=./configs/fastdds.xml
 
-ros2 daemon stop
-ros2 daemon start
-
-ros2 launch vision launch.py sim:=true "$@"
+# ros2 launch vision launch.py show_det:=true > vision_d.log 2>&1
+ros2 launch vision launch.py show_det:=false save_data:=false

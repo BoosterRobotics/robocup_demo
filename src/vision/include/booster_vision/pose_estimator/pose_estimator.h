@@ -21,10 +21,13 @@ public:
 
     virtual void Init(const YAML::Node &node){};
 
+    // CameraInfo may arrive after the estimator objects have been created.
+    void SetIntrinsics(const Intrinsics &intr) { intr_ = intr; }
+
     virtual Pose EstimateByColor(const Pose &p_eye2base, const DetectionRes &detection, const cv::Mat &rgb);
     virtual Pose EstimateByDepth(const Pose &p_eye2base, const DetectionRes &detection, const cv::Mat &rgb, const cv::Mat &depth);
 
-    bool use_depth_;
+    bool use_depth_ = false;
 protected:
     Intrinsics intr_;
 };
@@ -41,11 +44,17 @@ public:
     Pose EstimateByDepth(const Pose &p_eye2base, const DetectionRes &detection, const cv::Mat &rgb, const cv::Mat &depth) override;
 
 private:
+    Pose EstimateByColorWithoutCompensation(const Pose &p_eye2base,
+                                            const DetectionRes &detection) const;
+    Pose ApplyXYCompensation(const Pose &pose) const;
+
     float radius_;
     float downsample_leaf_size_;
     float cluster_distance_threshold_;
     float fitting_distance_threshold_;
     float filter_distance_;
+    float x_compensation_ = 0.0f;
+    float y_compensation_ = 0.0f;
     int minimum_cluster_size_;
     bool check_ball_height_;
 };
@@ -81,7 +90,18 @@ private:
     bool refine_;
 };
 
-cv::Point3f CalculatePositionByIntersection(const Pose &p_eye2base, const cv::Point2f target_uv, const Intrinsics &intr);
+cv::Point3f CalculatePositionByIntersection(const Pose &p_eye2base,
+                                            const cv::Point2f target_uv,
+                                            const Intrinsics &intr);
+cv::Point3f CalculatePositionByIntersection(const Pose &p_eye2base,
+                                            const cv::Point2f target_uv,
+                                            const Intrinsics &intr,
+                                            float plane_z);
+bool TryCalculatePositionByIntersection(const Pose &p_eye2base,
+                                        const cv::Point2f target_uv,
+                                        const Intrinsics &intr,
+                                        float plane_z,
+                                        cv::Point3f &position);
 
 struct FieldLineSegment {
     std::vector<cv::Point> contour_2d_points;

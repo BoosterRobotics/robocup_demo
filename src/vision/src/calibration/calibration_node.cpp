@@ -59,8 +59,7 @@ private:
     int board_h_ = 0;
     float board_square_size_ = 0.05;
     std::string calibration_mode_ = "handeye";
-    std::string color_topic_ = "";
-    std::string intrin_topic_ = "";
+    std::string camera_type_ = "";
     int sync_time_diff_ms_ = 1500; // ms
 
     std::string input_cfg_path_;
@@ -121,8 +120,7 @@ void CalibrationNode::Init(const std::string cfg_path, bool is_offline, std::str
         std::cerr << "no camera param found here" << std::endl;
         return;
     } else {
-        color_topic_ = cfg_node_["camera"]["color_topic"].as<std::string>();
-        intrin_topic_ = cfg_node_["camera"]["intrin_topic"].as<std::string>();
+        camera_type_ = cfg_node_["camera"]["type"].as<std::string>();
         intr_ = Intrinsics(cfg_node_["camera"]["intrin"]);
         p_eye2head_ = as_or<Pose>(cfg_node_["camera"]["extrin"], Pose());
     }
@@ -160,15 +158,32 @@ void CalibrationNode::Init(const std::string cfg_path, bool is_offline, std::str
     auto sub_opt_2 = rclcpp::SubscriptionOptions();
     sub_opt_2.callback_group = callback_group_sub_2;
 
+    std::string color_topic;
+    std::string intrin_topic;
+    if (camera_type_.find("zed") != std::string::npos) {
+        color_topic = "/boostercamera/head/rgb";
+        intrin_topic = "/boostercamera/head/depth/camera_info";
+    } else if (camera_type_ == "d-robotics") {
+        color_topic = "/boostercamera/head/rgb";
+        intrin_topic = "/boostercamera/head/depth/camera_info";
+    } else if (camera_type_ == "orbbec") {
+        color_topic = "/boostercamera/head/rgb";
+        intrin_topic = "/boostercamera/head/depth/camera_info";
+    } else {
+        // realsense
+        color_topic = "/boostercamera/head/rgb";
+        intrin_topic = "/boostercamera/head/depth/camera_info";
+    }
+
     it_ = std::make_shared<image_transport::ImageTransport>(shared_from_this());
-    color_sub_ = it_->subscribe(color_topic_, 2, &CalibrationNode::ColorCallback, this, nullptr, sub_opt_1);
+    color_sub_ = it_->subscribe(color_topic, 2, &CalibrationNode::ColorCallback, this, nullptr, sub_opt_1);
     pose_sub_ = this->create_subscription<geometry_msgs::msg::Pose>(
         "/head_pose", 10,
         std::bind(&CalibrationNode::PoseCallback, this, std::placeholders::_1), sub_opt_2);
     is_offline_ = is_offline;
     if (!is_offline_) {
         camera_info_sub_ = this->create_subscription<sensor_msgs::msg::CameraInfo>(
-            intrin_topic_, 10,
+            intrin_topic, 10,
             std::bind(&CalibrationNode::CameraInfoCallback, this, std::placeholders::_1));
     }
 
@@ -377,7 +392,7 @@ void CalibrationNode::RunExtrinsicCalibrationProcess(const SyncedDataBlock &data
                 }
                 std::ofstream sys_cfg("/opt/booster/vision.yaml");
                 if (!sys_cfg) {
-                    std::cerr << "failed to open /opt/booster/vision.yaml for writing (permission required?)" << std::endl;
+                    // std::cerr << "failed to open /opt/booster/vision.yaml for writing (permission required?)" << std::endl;
                     // fallback: write to /tmp and print next-step command
                     std::ostringstream oss;
                     oss << new_cfg_node;
@@ -386,9 +401,9 @@ void CalibrationNode::RunExtrinsicCalibrationProcess(const SyncedDataBlock &data
                         std::ofstream tmp_out(tmp_path);
                         if (tmp_out) {
                             tmp_out << oss.str();
-                            std::cout << "[fallback] wrote to temporary file: " << tmp_path << std::endl;
+                            std::cout << "[fallback] 已写入临时文件: " << tmp_path << std::endl;
                         } else {
-                            std::cerr << "[fallback] failed to write to temporary file: " << tmp_path << std::endl;
+                            std::cerr << "[fallback] 也无法写入临时文件 " << tmp_path << std::endl;
                         }
                     }
                 } else {
@@ -598,7 +613,7 @@ void CalibrationNode::RunExtrinsicOffsetCalibrationProcess(const SyncedDataBlock
                 }
                 std::ofstream sys_cfg("/opt/booster/vision.yaml");
                 if (!sys_cfg) {
-                    std::cerr << "failed to open /opt/booster/vision.yaml for writing (permission required?)" << std::endl;
+                    // std::cerr << "failed to open /opt/booster/vision.yaml for writing (permission required?)" << std::endl;
                     // fallback: write to /tmp and print next-step command
                     std::ostringstream oss;
                     oss << new_cfg_node;
@@ -607,9 +622,9 @@ void CalibrationNode::RunExtrinsicOffsetCalibrationProcess(const SyncedDataBlock
                         std::ofstream tmp_out(tmp_path);
                         if (tmp_out) {
                             tmp_out << oss.str();
-                            std::cout << "[fallback] wrote to temporary file: " << tmp_path << std::endl;
+                            std::cout << "[fallback] 已写入临时文件: " << tmp_path << std::endl;
                         } else {
-                            std::cerr << "[fallback] failed to write to temporary file: " << tmp_path << std::endl;
+                            std::cerr << "[fallback] 也无法写入临时文件 " << tmp_path << std::endl;
                         }
                     }
                 } else {
@@ -618,6 +633,29 @@ void CalibrationNode::RunExtrinsicOffsetCalibrationProcess(const SyncedDataBlock
                 }
             }
         }
+        // // save points
+        // std::vector<cv::Point3f> computed_points;
+        // for (size_t i = 0; i < computed_rays.size(); i++) {
+        //     auto computed_point = booster_vision::CalculatePositionByIntersection(p_head2bases[i] * p_head2head_prime * p_eye2head_, computed_rays[i]);
+        //     computed_points.push_back(computed_point);
+        // }
+
+        // YAML::Node optimization_res;
+        // for (size_t i = 0; i < computed_points.size(); i++) {
+        //     auto gt_3d = gt_3ds[i];
+        //     auto old_3d = old_points[i];
+        //     auto new_3d = computed_points[i];
+        //     bool selected = selected_flags[i];
+
+        //     YAML::Node point_res;
+        //     point_res["gt_3d"] = std::vector<float>{gt_3d.x, gt_3d.y, gt_3d.z};
+        //     point_res["old_3d"] = std::vector<float>{old_3d.x, old_3d.y, old_3d.z};
+        //     point_res["opt_3d"] = std::vector<float>{new_3d.x, new_3d.y, new_3d.z};
+        //     point_res["selected"] = selected;
+        //     optimization_res["point_" + std::to_string(i)] = point_res;
+        // }
+        // std::string optimization_res_path = "optimization_res_" + booster_vision::getTimeString() + ".yaml";
+        // data_logger_->LogYAML(optimization_res, optimization_res_path);
 
         std::cout << "finish extrinsics offset calibration process" << std::endl;
         std::cout << "auto exit after calibration" << std::endl;
@@ -717,29 +755,7 @@ void CalibrationNode::CameraInfoCallback(const sensor_msgs::msg::CameraInfo::Sha
     std::vector<float> distortion_coeffs(msg->d.begin(), msg->d.end());
 
     std::cout << "update camera intrinsics" << std::endl;
-
-    Intrinsics::DistortionModel distortion_model;
-
-    if (msg->d.empty())
-    {
-        distortion_model = Intrinsics::DistortionModel::kNone;
-    } else {
-        // Heuristic: if distortion coefficients are all zero, treat as no distortion
-        float distortion_sum = 0.0;
-        for (size_t i = 0; i < msg->d.size(); ++i) {
-            distortion_sum += std::abs(msg->d[i]);
-        }
-        if (distortion_sum < 1e-6) {
-            distortion_model = Intrinsics::DistortionModel::kNone;
-        } else {
-            if (msg->distortion_model == "plumb_bob") {
-                distortion_model = Intrinsics::DistortionModel::kInverseBrownConrady;
-            } else  {
-                distortion_model = Intrinsics::DistortionModel::kBrownConrady;
-            }
-        }
-    }
-
+    auto distotion_model = camera_type_ == "realsense" ? Intrinsics::DistortionModel::kInverseBrownConrady : Intrinsics::DistortionModel::kBrownConrady;
     float sum = 0.0;
     for (auto coeff : distortion_coeffs) {
         sum += coeff;
@@ -747,7 +763,7 @@ void CalibrationNode::CameraInfoCallback(const sensor_msgs::msg::CameraInfo::Sha
     if (sum < std::numeric_limits<float>::epsilon()) {
         intr_ = Intrinsics(fx, fy, cx, cy);
     } else {
-        intr_ = Intrinsics(fx, fy, cx, cy, distortion_coeffs, distortion_model);
+        intr_ = Intrinsics(fx, fy, cx, cy, distortion_coeffs, distotion_model);
     }
     cfg_node_["camera"]["intrin"] = intr_;
 

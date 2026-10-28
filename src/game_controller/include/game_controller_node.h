@@ -6,6 +6,7 @@
 #include <rclcpp/rclcpp.hpp>
 
 #include "RoboCupGameControlData.h"
+#include "game_controller_protocol_v20.h"
 
 #include "game_controller_interface/msg/game_control_data.hpp"
 
@@ -28,8 +29,9 @@ private:
     bool check_ip_white_list(string ip);
 
     // 处理数据包（逐字段复制）
-    void handle_packet(const RoboCupGameControlDataV19 &data, game_controller_interface::msg::GameControlData &msg);
-    void handle_packet(const RoboCupGameControlDataV20 &data, game_controller_interface::msg::GameControlData &msg);
+    void handle_packet(HlRoboCupGameControlData &data, game_controller_interface::msg::GameControlData &msg);
+    void handle_packet(const game_controller_protocol_v20::GameControlData &data,
+                       game_controller_interface::msg::GameControlData &msg);
 
     // 监听端口，从配置文件读
     int _port;

@@ -1,0 +1,96 @@
+camera:
+  type: d-robotics
+  camera_info_topic: /boostercamera/head/rgb/camera_info
+  intrin_wait_timeout_sec: 3.0
+  intrin:
+    fx: 213.079803
+    fy: 213.079803
+    cx: 277.677612
+    cy: 231.789886
+    distortion_model: 0
+    distortion_coeffs:
+      []
+  extrin:
+    -
+      - 0.0
+      - 0.0
+      - 1.0
+      - 0.060100
+    -
+      - -1.0
+      - 0.0
+      - 0.0
+      - 0.035100
+    -
+      - 0.0
+      - -1.0
+      - 0.0
+      - 0.092770
+    -
+      - 0
+      - 0
+      - 0
+      - 1
+  pitch_compensation: 0
+  yaw_compensation: 0
+  z_compensation: 0
+detection_model:
+  model_path: ./src/vision/model/best_digua_1223_10.3.engine
+  confidence_threshold: 0.2
+  nms_threshold: 0.4
+  classnames: [Ball, Goalpost, Person, LCross, TCross, XCross, PenaltyPoint, Opponent, BRMarker]
+  post_process:
+    single_ball_assumption: false
+    confidence_thresholds:
+      Ball: 0.4
+      Goalpost: 0.4
+      Person: 0.4
+      LCross: 0.3
+      TCross: 0.3
+      XCross: 0.3
+      PenaltyPoint: 0.3
+      Opponent: 0.4
+      BRMarker: 0.2
+segmentation_model:
+  model_path: ./src/vision/model/best_seg_orin_10.3.engine
+  confidence_threshold: 0.3
+  nms_threshold: 0.9
+use_depth: true
+ball_pose_estimator:
+  use_depth: false
+  # Supported sizes: 3 (0.090 m), 4 (0.095 m), 5 (0.105 m).
+  ball_size: 3
+  # Ball-only additive offsets in the robot base frame, unit: metre (m).
+  # ROS base axes: +x is forward, +y is left; negative values shift backward/right.
+  # Applied after ball-center ranging:
+  #   output_x = measured_x + x_compensation
+  #   output_y = measured_y + y_compensation
+  # Example: x_compensation: 0.05 adds 5 cm forward;
+  #          y_compensation: -0.02 adds 2 cm to the right.
+  x_compensation: 0.02
+  y_compensation: -0.06
+  down_sample_leaf_size: 0.01
+  cluster_distance_threshold: 0.01
+  fitting_distance_threshold: 0.01
+  minimum_cluster_size: 150
+  filter_distance: 1.2
+  check_ball_height: true
+human_like_pose_estimator:
+  use_depth: false
+  down_sample_leaf_size: 0.01
+  fitting_distance_threshold: 0.01
+  statistic_outlier_multiplier: 0.01
+field_marker_pose_estimator:
+  refine: false
+  line_segment_area_threshold: 75
+calibration:
+  sync_max_time_diff_ms: 1400
+  offset:
+    exclude_distance: 2.0
+    zero_translation: true
+    field_marker_path: ./src/vision/config/field.yaml
+  handeye:
+    calibration_time: 2026-04-11-09-47-23
+    reprojection_error: 2.5350552245663476
+misc:
+  save_data_nonstationary: true

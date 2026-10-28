@@ -1,15 +1,16 @@
-<!-- locate behavior tree -->
+<!-- 定位模块: 使用多种特征组合进行位置校正 -->
 
 <root BTCPP_format="4" >
   <BehaviorTree ID="Locate">
      <Sequence name="root">
         <SelfLocate mode="trust_direction" />
-        <SelfLocate1M msecs_interval="300" max_dist="3.0" max_drift="2.0" />
-        <SelfLocate2T msecs_interval="300" max_dist="3.0" max_drift="2.0" />
-        <SelfLocatePT msecs_interval="300" max_dist="3.0" max_drift="2.0" />
-        <SelfLocateLT msecs_interval="300" max_dist="3.0" max_drift="2.0" />
-        <SelfLocate2X msecs_interval="300" max_dist="3.0" max_drift="2.0" />
-        <SelfLocateBorder msecs_interval="300" max_dist="3.0" max_drift="2.0"/>
+        <SelfLocate1M msecs_interval="300" max_dist="5.0" max_drift="3.5" />
+        <SelfLocate2T msecs_interval="300" max_dist="5.0" max_drift="3.5" />
+        <SelfLocatePT msecs_interval="300" max_dist="5.0" max_drift="3.5" />
+        <SelfLocateLT msecs_interval="300" max_dist="5.0" max_drift="3.5" />
+        <SelfLocate2X msecs_interval="300" max_dist="5.0" max_drift="3.5" />
+        <SelfLocateBorder msecs_interval="300" max_dist="5.0" max_drift="3.5"/>
+        <!-- <SelfLocateLine msecs_interval="300" max_dist="3.0" max_drift="1.5"/> -->
      </Sequence>
   </BehaviorTree>
 </root>

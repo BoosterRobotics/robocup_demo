@@ -1,0 +1,13 @@
+string label
+string color
+float64 confidence
+int64 xmin
+int64 ymin
+int64 xmax
+int64 ymax
+float32[] target_uv
+float32[] received_pos
+float32[] position
+float32[] position_projection
+float32[] position_cam
+int32 position_confidence

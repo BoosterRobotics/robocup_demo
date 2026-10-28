@@ -6,31 +6,50 @@
       <ReactiveSequence>
          <SelfLocate mode="trust_direction" />
          <SubTree ID="Locate" _autoremap="true" _while="decision!='find'" />
-         <ReactiveSequence _while="wait_for_opponent_kickoff" name="wait for opponent kickoff">
+         <ReactiveSequence _while="wait_for_opponent_kickoff" name="等待对方开球">
+            <!-- <PrintMsg msg="等待对方开球"/> -->
             <SubTree ID="CamFindAndTrackBall" _autoremap="true" />
             <SetVelocity />
+            <!-- <StepOnSpot /> -->
          </ReactiveSequence>
-         <ReactiveSequence _while="!wait_for_opponent_kickoff" name="our kickoff or opponent already kicked off">
+         <ReactiveSequence _while="!wait_for_opponent_kickoff" name="/正常比赛, 即已方开球或对方已经开球">
+            <ReactiveSequence
+               _while="gc_opponent_set_play_search_direction != 0"
+               name="我方门球或角球的远距离找球">
+               <CamFindBall />
+               <MoveToFarSetPlaySearchArea />
+            </ReactiveSequence>
             <Sequence _while="ball_out">
                <SubTree ID="CamFindAndTrackBall" _autoremap="true" />
+               <!-- <SetVelocity /> -->
                <GoBackInField />
+               <!-- <Sleep msec="1000" /> -->
                <SubTree ID="Locate" _autoremap="true" _while="decision!='find'" />
             </Sequence>
             <ReactiveSequence _while="!ball_out">
+               <!-- <SubTree ID="CamFindAndTrackBall" _autoremap="true" /> -->
                <ReactiveSequence >
+                  <!-- <CamTrackBall /> -->
                   <SubTree ID="CamFindAndTrackBall" _autoremap="true" />
                   <CalcKickDir />
                   <Sequence>
                      <ReactiveSequence>
                         <StrikerDecide decision_out="{decision}" decision_in="{decision}" chase_threshold="1.0" />
-                        <SubTree ID="FindBall" _while="decision=='find'" _autoremap="true" />
+                        <!-- 比赛中丢球时持续原地转身找球，避免 FindBall 扫描完成后进入待机。 -->
+                        <RobotFindBall _while="decision == 'find'" vyaw_limit="0.8" />
                      </ReactiveSequence>
-                        <Assist _while="decision == 'assist'" vx_limit = "0.2" vy_limit="0.2" />
-                        <Chase   _while="decision == 'chase'"  vx_limit="0.9"  vy_limit="0.2"  vtheta_limit="1.0"  dist="0.1" safe_dist="0.5" />
+                        <KickoffStand _while="decision == 'kickoff_hold'" dist_tolerance="0.5" theta_tolerance="0.2" vx_limit="0.6" vy_limit="0.5" hold_vtheta_limit="0.6" />
+                        <Assist _while="decision == 'assist'" vx_limit = "1.2" vy_limit="0.6" />
+                        <!-- <Chase3   _while="decision == 'chase'"  vx_limit="1.5"  vy_limit="0.3"  vtheta_limit="1.5"  dist="0.4" safe_dist="0.6" /> -->
+                        <Chase   _while="decision == 'chase'"  vx_limit="1.6"  vy_limit="0.8"  vtheta_limit="1.5"  dist="0.1" safe_dist="0.5" />
                         <RLVisionKick _while="decision == 'auto_visual_kick'" min_msec_kick="1500" max_msec_kick="7000" range="6.0"/>
-                        <Adjust _while="decision =='adjust'" turn_threshold="0.5" range="0.4" vx_limit="0.7" vy_limit="0.6" vtheta_limit="1.5" vtheta_factor="1.5" tangential_speed_far="0.7" tangential_speed_near="0.15" />
-                        <Kick _while="decision == 'kick'" speed_limit="0.8" min_msec_kick="1000" msecs_stablize="1000"/>
-                        <Kick _while="decision == 'cross'" speed_limit="0.4" min_msec_kick="300"/>
+                        <!-- <Adjust  _while="decision == 'adjust'"  turn_threshold="0.2" range="0.4" vx_limit="0.4" vy_limit="0.4" vtheta_limit="1.0" /> -->
+                        <!-- <Adjust2  _while="decision == 'adjust'"  range="0.4" vx_limit="0.4" vy_limit="0.4" vtheta_limit="1.5" /> -->
+                        <!-- <Adjust4 _while="decision =='adjust'" turn_threshold="0.5" range="0.5" vx_limit="0.5" vy_limit="0.5" vtheta_limit="1.5" vtheta_factor="1.0" tangential_speed_far="0.7" tangential_speed_near="0.15" /> -->
+                        <Adjust _while="decision =='adjust'" turn_threshold="0.5" range="0.4" vx_limit="0.9" vy_limit="0.8" vtheta_limit="2.0" vtheta_factor="1.5" tangential_speed_far="0.7" tangential_speed_near="0.15" near_threshold="0.8" no_turn_threshold="0.1" turn_first_threshold="0.5" />
+                        <Kick _while="decision == 'power_kick'" speed_limit="1.4" min_msec_kick="1200" msecs_stablize="300"/>
+                        <Kick _while="decision == 'kick'" speed_limit="0.9" min_msec_kick="1000" msecs_stablize="1000"/>
+                        <Kick _while="decision == 'cross'" speed_limit="0.6" min_msec_kick="600"/>
                   </Sequence>
                </ReactiveSequence>
             </ReactiveSequence>

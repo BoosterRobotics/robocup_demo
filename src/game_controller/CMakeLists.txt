@@ -19,6 +19,15 @@ target_include_directories(game_controller_node PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>)
 
+include(CTest)
+if(BUILD_TESTING)
+  add_executable(game_controller_protocol_v20_test test/protocol_v20_test.cpp)
+  target_include_directories(game_controller_protocol_v20_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include)
+  add_test(NAME game_controller_protocol_v20_test
+    COMMAND game_controller_protocol_v20_test)
+endif()
+
 install(DIRECTORY launch
   DESTINATION share/${PROJECT_NAME})
 install(TARGETS

@@ -12,28 +12,31 @@ using namespace std;
 int main(int argc, char **argv)
 {
 
+    // 初始化 ros2
     rclcpp::init(argc, argv);
 
+    // Brain 对象
     std::shared_ptr<Brain> brain = std::make_shared<Brain>();
 
-    // initialize operations: read parameters, construct BehaviorTree, etc.
+    // 执行初始化操作：读取参数，构建 BehaviorTree 等
     brain->init();
 
-    // Start a separate thread to run the tick function of Brain at a fixed frequency (HZ). The main thread will handle ROS2 callbacks.
+    // 单独开一个线程执行 brain.tick
     thread t([&brain]() {
         while (rclcpp::ok()) {
             auto start_time = brain->get_clock()->now();
             brain->tick();
             auto end_time = brain->get_clock()->now();
-            auto duration = (end_time - start_time).nanoseconds() / 1000000.0; // Convert to milliseconds
-            brain->log->log_scalar("performance", "brain_tick_duration_ms", duration);
+            auto duration = (end_time - start_time).nanoseconds() / 1000000.0; // 转换为毫秒
+            brain->log->setTimeNow();
+            brain->log->log("performance/brain_tick", rerun::Scalar(duration));
             this_thread::sleep_for(chrono::milliseconds(static_cast<int>(1000 / HZ)));
         } 
     });
 
-    // Start a separate thread to handle joystick and gamecontroller callbacks
+    // 开个独立的线程，处理 joystick 和 gamecontroller 的回调
     thread t1([&brain, &argc, &argv]() {
-        // Use a separate context
+        // 用独立的 context
         auto context = rclcpp::Context::make_shared();
         context->init(argc, argv);
         rclcpp::NodeOptions opt;
@@ -41,14 +44,13 @@ int main(int argc, char **argv)
         auto node = rclcpp::Node::make_shared("brain_node_ext", opt);
         auto sub1 = node->create_subscription<booster_interface::msg::RemoteControllerState>("/remote_controller_state", 10, bind(&Brain::joystickCallback, brain, std::placeholders::_1));
         auto sub2 = node->create_subscription<game_controller_interface::msg::GameControlData>("/robocup/game_controller", 10, bind(&Brain::gameControlCallback, brain, std::placeholders::_1));
-        auto sub3 = node->create_subscription<std_msgs::msg::String>("/booster_agent/soccer_game_control", 1, bind(&Brain::agentCommandCallback, brain, std::placeholders::_1));
     
         rclcpp::executors::SingleThreadedExecutor executor;
         executor.add_node(node);
         executor.spin(); 
     });
 
-    // Use a single-threaded executor
+    // 使用单线程执行器
     rclcpp::executors::SingleThreadedExecutor executor;
     executor.add_node(brain);
     executor.spin();

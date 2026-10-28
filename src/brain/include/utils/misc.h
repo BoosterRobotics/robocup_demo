@@ -6,7 +6,7 @@
 #include <sstream>
 #include <yaml-cpp/yaml.h>
 
-// Calculate milliseconds elapsed since start_time
+// 计算从 start_time 开始到现在, 经过了多少毫秒
 inline int msecsSince(std::chrono::high_resolution_clock::time_point start_time)
 {
     auto now = std::chrono::high_resolution_clock::now();
@@ -24,10 +24,10 @@ inline std::string gen_uuid() {
     for (int i = 0; i < 8; i++) ss << uni(rng);
     ss << "-";
     for (int i = 0; i < 4; i++) ss << uni(rng);
-    ss << "-4"; // The 13th character is '4', indicating this is a version 4 UUID
+    ss << "-4"; // 第13位是4，表明这是一个版本4的UUID
     for (int i = 0; i < 3; i++) ss << uni(rng);
     ss << "-";
-    ss << uni8(rng); // The 17th character is 8, 9, A, or B
+    ss << uni8(rng); // 第17位是8、9、A或B
     for (int i = 0; i < 3; i++) ss << uni(rng);
     ss << "-";
     for (int i = 0; i < 12; i++) ss << uni(rng);
@@ -38,7 +38,7 @@ inline std::string gen_uuid() {
 // generate a timestamp string in format "YYYYMMDD_HHMMSS"
 inline std::string gen_timestamp_str() {
     auto now = std::chrono::system_clock::now();
-    now += std::chrono::hours(0); // Force to UTC+0 timezone
+    now += std::chrono::hours(8); // 强制东八区
     auto now_time_t = std::chrono::system_clock::to_time_t(now);
     std::tm now_tm = *std::gmtime(&now_time_t); 
     char timestamp[20];

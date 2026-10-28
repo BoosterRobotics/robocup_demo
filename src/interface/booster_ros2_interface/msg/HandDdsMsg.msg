@@ -1,1 +1,0 @@
-HandCommand[] hands_vec

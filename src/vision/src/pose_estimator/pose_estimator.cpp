@@ -3,28 +3,97 @@
 #include "booster_vision/base/misc_utils.hpp"
 #include "booster_vision/base/pointcloud_process.h"
 
+#include <cmath>
+
 namespace booster_vision {
 
-cv::Point3f CalculatePositionByIntersection(const Pose &p_eye2base, const cv::Point2f target_uv, const Intrinsics &intr) {
-    cv::Point3f normalized_point3d = intr.BackProject(target_uv);
+namespace {
 
-    cv::Mat mat_obj_ray = (cv::Mat_<float>(3, 1) << normalized_point3d.x, normalized_point3d.y, normalized_point3d.z);
-    cv::Mat mat_rot = p_eye2base.getRotationMatrix();
-    cv::Mat mat_trans = p_eye2base.toCVMat().col(3).rowRange(0, 3);
+float BallRadiusForSize(int ball_size) {
+    switch (ball_size) {
+        case 3:
+            return 0.090f;
+        case 4:
+            return 0.095f;
+        case 5:
+            return 0.105f;
+        default:
+            std::cerr << "unsupported ball_size " << ball_size
+                      << "; falling back to size 3" << std::endl;
+            return 0.090f;
+    }
+}
 
-    cv::Mat mat_rot_obj_ray = mat_rot * mat_obj_ray;
+} // namespace
 
-    float scale = -mat_trans.at<float>(2, 0) / mat_rot_obj_ray.at<float>(2, 0);
+cv::Point3f CalculatePositionByIntersection(const Pose &p_eye2base,
+                                             const cv::Point2f target_uv,
+                                             const Intrinsics &intr) {
+    return CalculatePositionByIntersection(p_eye2base, target_uv, intr, 0.0f);
+}
 
-    cv::Mat mat_position = mat_trans + scale * mat_rot_obj_ray;
-    return cv::Point3f(mat_position.at<float>(0, 0), mat_position.at<float>(1, 0), mat_position.at<float>(2, 0));
+cv::Point3f CalculatePositionByIntersection(const Pose &p_eye2base,
+                                             const cv::Point2f target_uv,
+                                             const Intrinsics &intr,
+                                             float plane_z) {
+    const cv::Point3f ray_eye = intr.BackProject(target_uv);
+    const cv::Mat mat_ray_eye =
+        (cv::Mat_<float>(3, 1) << ray_eye.x, ray_eye.y, ray_eye.z);
+    const cv::Mat mat_rot = p_eye2base.getRotationMatrix();
+    const cv::Mat mat_trans = p_eye2base.toCVMat().col(3).rowRange(0, 3);
+    const cv::Mat mat_ray_base = mat_rot * mat_ray_eye;
+
+    const float scale = (plane_z - mat_trans.at<float>(2, 0)) /
+                        mat_ray_base.at<float>(2, 0);
+    const cv::Mat mat_position = mat_trans + scale * mat_ray_base;
+    return cv::Point3f(mat_position.at<float>(0, 0),
+                       mat_position.at<float>(1, 0),
+                       mat_position.at<float>(2, 0));
+}
+
+bool TryCalculatePositionByIntersection(const Pose &p_eye2base,
+                                        const cv::Point2f target_uv,
+                                        const Intrinsics &intr,
+                                        float plane_z,
+                                        cv::Point3f &position) {
+    const cv::Point3f ray_eye = intr.BackProject(target_uv);
+    if (!std::isfinite(ray_eye.x) || !std::isfinite(ray_eye.y) ||
+        !std::isfinite(ray_eye.z) || !std::isfinite(plane_z)) {
+        return false;
+    }
+
+    const cv::Mat mat_ray_eye =
+        (cv::Mat_<float>(3, 1) << ray_eye.x, ray_eye.y, ray_eye.z);
+    const cv::Mat mat_rot = p_eye2base.getRotationMatrix();
+    const cv::Mat mat_trans = p_eye2base.toCVMat().col(3).rowRange(0, 3);
+    const cv::Mat mat_ray_base = mat_rot * mat_ray_eye;
+    const float ray_z = mat_ray_base.at<float>(2, 0);
+    if (!std::isfinite(ray_z) || std::abs(ray_z) < 1e-6f) {
+        return false;
+    }
+
+    const float camera_z = mat_trans.at<float>(2, 0);
+    const float scale = (plane_z - camera_z) / ray_z;
+    if (!std::isfinite(camera_z) || !std::isfinite(scale) || scale <= 0.0f) {
+        return false;
+    }
+
+    const cv::Mat mat_position = mat_trans + scale * mat_ray_base;
+    position = cv::Point3f(mat_position.at<float>(0, 0),
+                           mat_position.at<float>(1, 0),
+                           mat_position.at<float>(2, 0));
+    return std::isfinite(position.x) && std::isfinite(position.y) &&
+           std::isfinite(position.z);
 }
 
 Pose PoseEstimator::EstimateByColor(const Pose &p_eye2base, const DetectionRes &detection, const cv::Mat &rgb) {
     // TODO(GW): add modification for cross class
     auto bbox = detection.bbox;
     cv::Point2f target_uv = cv::Point2f(bbox.x + bbox.width / 2, bbox.y + bbox.height / 2);
-    cv::Point3f target_xyz = CalculatePositionByIntersection(p_eye2base, target_uv, intr_);
+    cv::Point3f target_xyz;
+    if (!TryCalculatePositionByIntersection(p_eye2base, target_uv, intr_, 0.0f, target_xyz)) {
+        return Pose();
+    }
     return Pose(target_xyz.x, target_xyz.y, target_xyz.z, 0, 0, 0);
 }
 
@@ -34,29 +103,55 @@ Pose PoseEstimator::EstimateByDepth(const Pose &p_eye2base, const DetectionRes &
 
 void BallPoseEstimator::Init(const YAML::Node &node) {
     use_depth_ = as_or<bool>(node["use_depth"], false);
-    radius_ = as_or<float>(node["radius"], 0.109);
+    const int ball_size = as_or<int>(node["ball_size"], 3);
+    radius_ = BallRadiusForSize(ball_size);
     downsample_leaf_size_ = as_or<float>(node["down_sample_leaf_size"], 0.01);
     cluster_distance_threshold_ = as_or<float>(node["cluster_distance_threshold"], 0.01);
     fitting_distance_threshold_ = as_or<float>(node["fitting_distance_threshold"], 0.01);
     minimum_cluster_size_ = as_or<int>(node["minimum_cluster_size"], 150);
     filter_distance_ = as_or<float>(node["filter_distance"], 1.0);
     check_ball_height_ = as_or<bool>(node["check_ball_height"], false);
+    x_compensation_ = as_or<float>(node["x_compensation"], 0.0f);
+    y_compensation_ = as_or<float>(node["y_compensation"], 0.0f);
+    std::cout << "ball size: " << ball_size << ", radius: " << radius_ << " m" << std::endl;
     std::cout << "filter_distance: " << filter_distance_ << std::endl;
+    std::cout << "ball xy compensation: x=" << x_compensation_
+              << " m, y=" << y_compensation_ << " m" << std::endl;
+}
+
+Pose BallPoseEstimator::ApplyXYCompensation(const Pose &pose) const {
+    cv::Mat compensated_pose = pose.toCVMat().clone();
+    compensated_pose.at<float>(0, 3) += x_compensation_;
+    compensated_pose.at<float>(1, 3) += y_compensation_;
+    return Pose(compensated_pose);
+}
+
+Pose BallPoseEstimator::EstimateByColorWithoutCompensation(
+    const Pose &p_eye2base, const DetectionRes &detection) const {
+    const auto &bbox = detection.bbox;
+    const cv::Point2f target_uv(
+        bbox.x + bbox.width / 2.0f, bbox.y + bbox.height / 2.0f);
+    cv::Point3f target_xyz;
+    if (!TryCalculatePositionByIntersection(
+            p_eye2base, target_uv, intr_, radius_, target_xyz)) {
+        return Pose();
+    }
+    return Pose(target_xyz.x, target_xyz.y, target_xyz.z, 0, 0, 0);
 }
 
 Pose BallPoseEstimator::EstimateByColor(const Pose &p_eye2base, const DetectionRes &detection, const cv::Mat &rgb) {
-    // TODO(GW): add modification for cross class
-    auto bbox = detection.bbox;
-    cv::Point2f target_uv = cv::Point2f(bbox.x + bbox.width / 2, bbox.y + bbox.height);
-    cv::Point3f target_xyz = CalculatePositionByIntersection(p_eye2base, target_uv, intr_);
-    return Pose(target_xyz.x, target_xyz.y, target_xyz.z, 0, 0, 0);
+    const Pose pose = EstimateByColorWithoutCompensation(p_eye2base, detection);
+    return pose == Pose() ? pose : ApplyXYCompensation(pose);
 }
 
 Pose BallPoseEstimator::EstimateByDepth(const Pose &p_eye2base, const DetectionRes &detection, const cv::Mat &rgb, const cv::Mat &depth) {
     if (!use_depth_ || depth.empty()) return Pose();
 
-    auto pose = EstimateByColor(p_eye2base, detection, cv::Mat());
-    if (cv::norm(pose.getTranslationVec()) > filter_distance_) return pose;
+    auto pose = EstimateByColorWithoutCompensation(p_eye2base, detection);
+    if (pose == Pose()) return Pose();
+    if (cv::norm(pose.getTranslationVec()) > filter_distance_) {
+        return ApplyXYCompensation(pose);
+    }
     std::cout << "ball distance by color: " << cv::norm(pose.getTranslationVec()) << std::endl;
 
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZRGB>);
@@ -86,7 +181,7 @@ Pose BallPoseEstimator::EstimateByDepth(const Pose &p_eye2base, const DetectionR
             if (check_ball_height_ && pose.getTranslationVec()[2] < -0.03) {
                 continue;
             }
-            return pose;
+            return ApplyXYCompensation(pose);
         }
     }
     return Pose();
@@ -102,7 +197,10 @@ void HumanLikePoseEstimator::Init(const YAML::Node &node) {
 Pose HumanLikePoseEstimator::EstimateByColor(const Pose &p_eye2base, const DetectionRes &detection, const cv::Mat &rgb) {
     auto bbox = detection.bbox;
     cv::Point2f target_uv = cv::Point2f(bbox.x + bbox.width / 2, bbox.y + bbox.height);
-    cv::Point3f target_xyz = CalculatePositionByIntersection(p_eye2base, target_uv, intr_);
+    cv::Point3f target_xyz;
+    if (!TryCalculatePositionByIntersection(p_eye2base, target_uv, intr_, 0.0f, target_xyz)) {
+        return Pose();
+    }
     return Pose(target_xyz.x, target_xyz.y, target_xyz.z, 0, 0, 0);
 }
 
@@ -440,7 +538,7 @@ cv::Point2f RefineFieldMarkerCenterDetection(const cv::Mat &img, const cv::Rect 
 
 Pose FieldMarkerPoseEstimator::EstimateByColor(const Pose &p_eye2base, const DetectionRes &detection, const cv::Mat &color) {
     auto pose = PoseEstimator::EstimateByColor(p_eye2base, detection, color);
-    if (!refine_) return pose;
+    if (!refine_ || pose == Pose()) return pose;
 
     float scale_factor = 2.0 / pose.getTranslationVec()[0];
     cv::Point2f target_uv = RefineFieldMarkerCenterDetection(color, detection.bbox, scale_factor);

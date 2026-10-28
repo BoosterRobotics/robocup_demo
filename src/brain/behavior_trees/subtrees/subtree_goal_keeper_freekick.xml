@@ -5,8 +5,10 @@
    <BehaviorTree ID="GoalKeeperFreekick">
       <ReactiveSequence >
          <SubTree ID="CamFindAndTrackBall" _autoremap="true" />
+         <CamScanField _while="!ball_location_known" />
          <GoToReadyPosition _while="!ball_location_known" />
-         <GoToGoalBlockingPosition _while="ball_location_known" />
+         <CamScanField _while="ball_location_known" />
+         <GoToGoalBlockingPosition _while="ball_location_known" dist_to_goalline="1.0" />
          <SelfLocate mode="trust_direction" _while="odom_calibrated" />
       </ReactiveSequence>
    </BehaviorTree>

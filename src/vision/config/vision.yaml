@@ -1,38 +1,31 @@
 camera:
-  # color_topic: "/camera/robot0_rgbd_camera/rgb/image_compressed" # sim
-  # depth_topic: "/camera/robot0_rgbd_camera/depth/image_raw" # sim
-  # intrin_topic: "/camera/robot0_rgbd_camera/rgb/camera_info" # sim
-
-  color_topic: "/boostercamera/head/rgb" # In version 1.6, camera topics of different types were uniformly named.
-  depth_topic: "/boostercamera/head/depth" # In version 1.6, camera topics of different types were uniformly named.
-  intrin_topic: "/boostercamera/head/rgb/camera_info" # In version 1.6, camera topics of different types were uniformly named.
-
+  type: realsense
+  camera_info_topic: /boostercamera/head/rgb/camera_info
+  intrin_wait_timeout_sec: 3.0
   intrin:
-    fx: 206.445511
-    fy: 206.445511
-    cx: 224.958221
-    cy: 242.717239
+    fx: 642.414673
+    fy: 641.951172
+    cx: 639.024414
+    cy: 353.080536
     distortion_model: 0
     distortion_coeffs:
       []
   extrin:
-    # cam(x right y down z forward) -> head(x forward y left z up)
-    # Note: pitch compensation is done in code, here we only put the real offset of
     -
-      - 0.0753363073
-      - 0.0190046262
-      - 0.996977091
-      - -0.0122268423
+      - 0.0151383793
+      - -0.284051657
+      - 0.958689511
+      - -0.0115088783
     -
-      - -0.99715662
-      - -0.000328667404
-      - 0.0753561407
-      - 0.0440084077
+      - -0.999885082
+      - -0.00493983133
+      - 0.0143252602
+      - -0.0149254892
     -
-      - 0.00175978895
-      - -0.999819338
-      - 0.018925827
-      - -0.0283811111
+      - 0.000666650303
+      - -0.958796263
+      - -0.284093797
+      - -0.0214525741
     -
       - 0
       - 0
@@ -42,21 +35,21 @@ camera:
   yaw_compensation: 0
   z_compensation: 0
 detection_model:
-  model_path: ./src/vision/model/best_digua_second_10.3.engine
+  model_path: ./src/vision/model/k1_realsense_0120.engine
   confidence_threshold: 0.2
   nms_threshold: 0.4
   classnames: [Ball, Goalpost, Person, LCross, TCross, XCross, PenaltyPoint, Opponent, BRMarker]
   post_process:
     single_ball_assumption: false
     confidence_thresholds:
-      Ball: 0.2
-      Goalpost: 0.2
-      Person: 0.2
-      LCross: 0.1
-      TCross: 0.1
-      XCross: 0.1
-      PenaltyPoint: 0.1
-      Opponent: 0.5
+      Ball: 0.4
+      Goalpost: 0.4
+      Person: 0.4
+      LCross: 0.3
+      TCross: 0.3
+      XCross: 0.3
+      PenaltyPoint: 0.3
+      Opponent: 0.4
       BRMarker: 0.2
 segmentation_model:
   model_path: ./src/vision/model/best_seg_orin_10.3.engine
@@ -65,7 +58,17 @@ segmentation_model:
 use_depth: false
 ball_pose_estimator:
   use_depth: false
-  radius: 0.109
+  # Supported sizes: 3 (0.090 m), 4 (0.095 m), 5 (0.105 m).
+  ball_size: 3
+  # Ball-only additive offsets in the robot base frame, unit: metre (m).
+  # ROS base axes: +x is forward, +y is left; negative values shift backward/right.
+  # Applied after ball-center ranging:
+  #   output_x = measured_x + x_compensation
+  #   output_y = measured_y + y_compensation
+  # Example: x_compensation: 0.05 adds 5 cm forward;
+  #          y_compensation: -0.02 adds 2 cm to the right.
+  x_compensation: 0.06
+  y_compensation: -0.06
   down_sample_leaf_size: 0.01
   cluster_distance_threshold: 0.01
   fitting_distance_threshold: 0.01
@@ -87,8 +90,7 @@ calibration:
     zero_translation: true
     field_marker_path: ./src/vision/config/field.yaml
   handeye:
-    calibration_time: 2000-01-01-09-29-08
-    reprojection_error: 3.5616553263245252
+    calibration_time: 2026-04-11-09-47-23
+    reprojection_error: 2.5350552245663476
 misc:
   save_data_nonstationary: true
-robot_name: "" # If there are multiple robots, specify the name, e.g., "robot0", "robot1", etc. Leave empty for a single robot

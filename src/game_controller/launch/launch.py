@@ -22,7 +22,7 @@ def generate_launch_description():
 
                     # 只接收指定
                     "ip_white_list": [
-                        "192.168.30.170",
+                        "172.169.80.24",
                     ],
                 }
             ]
