@@ -14,9 +14,8 @@ int main(int argc, char **argv) {
 
     std::string config_template_path = argv[1];
     // The first file is the complete runtime template (vision.yaml).
-    // Remaining files are optional overrides, in order. This lets a generated
-    // calibration result stay minimal while all runtime defaults come from the
-    // stable template.
+    // Remaining files override only camera/calibration, in order. All other
+    // YAML sections continue to come from the complete runtime template.
     std::vector<std::string> config_paths;
     for (int i = 2; i < argc; ++i) {
         // ros2 launch appends its own arguments after this marker. They must

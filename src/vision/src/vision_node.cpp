@@ -279,10 +279,9 @@ bool VisionNode::Init(
     }
 
     YAML::Node node = YAML::LoadFile(cfg_template_path);
-    // Merge every optional override on top of the complete runtime template.
-    // Calibration output files are intentionally allowed to contain only
-    // camera/calibration fields; missing detector and synchronization settings
-    // remain supplied by the complete local vision.yaml template.
+    // Only camera/calibration sections from optional files may override the
+    // complete local template. Ignore other sections even when the robot-side
+    // vision.yaml contains a full runtime configuration.
     for (const auto &cfg_path : cfg_paths) {
         if (cfg_path.empty()) {
             continue;
@@ -294,7 +293,7 @@ bool VisionNode::Init(
             continue;
         }
         YAML::Node cfg_node = YAML::LoadFile(cfg_path);
-        MergeYAML(node, cfg_node);
+        MergeCameraCalibrationYAML(node, cfg_node);
     }
 
     std::cout << "loaded file: " << std::endl

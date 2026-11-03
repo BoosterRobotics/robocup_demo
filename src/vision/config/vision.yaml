@@ -30,10 +30,13 @@ camera:
       - 0
       - 0
       - 1
+  # The following pitch/yaw/z compensations apply only when calibration.auto_calibrate is false.
+  # They are ignored when calibration.auto_calibrate is true.
   pitch_compensation: 0
   yaw_compensation: 0
   z_compensation: 0
   # Robot-frame XY offsets applied only to ball ranging, in meters.
+  # Both ball_x_compensation and ball_y_compensation apply whether calibration.auto_calibrate is true or false.
   # Compensated values: x = measured_x + ball_x_compensation; y = measured_y + ball_y_compensation.
   # Robot frame: +x forward and +y left. Use negative values for backward or rightward correction.
   # Example: if ball x is consistently short by 0.08 m, set ball_x_compensation to 0.08.

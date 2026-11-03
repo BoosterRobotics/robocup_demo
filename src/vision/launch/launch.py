@@ -10,7 +10,7 @@ def handle_configuration(context, *args, **kwargs):
 
     user_cfg_path = LaunchConfiguration('vision_config_path').perform(context).strip()
     # vision.yaml is the complete local runtime template. A robot-side or
-    # user-supplied vision.yaml is optional and is merged on top of it.
+    # user-supplied vision.yaml may override only camera/calibration sections.
     config_file = os.path.join(default_config_path, 'vision.yaml')
     config_override_files = []
     if user_cfg_path:
@@ -58,7 +58,7 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'vision_config_path',
             default_value='',
-            description='Optional vision config directory or standalone YAML override (empty => use package default)'
+            description='Optional config directory or YAML file; only camera/calibration override package defaults (empty => package defaults only)'
         ),
         DeclareLaunchArgument(
             "offline_mode",

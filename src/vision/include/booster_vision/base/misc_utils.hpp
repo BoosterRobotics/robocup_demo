@@ -82,3 +82,15 @@ void MergeYAML(YAML::Node a, const YAML::Node &b) {
         }
     }
 }
+
+// Robot-side vision.yaml may also contain runtime settings from another
+// deployment. Only camera and calibration may override the local template.
+void MergeCameraCalibrationYAML(YAML::Node base, const YAML::Node &override_node) {
+    YAML::Node selected(YAML::NodeType::Map);
+    for (const char *section : {"camera", "calibration"}) {
+        if (override_node[section]) {
+            selected[section] = override_node[section];
+        }
+    }
+    MergeYAML(base, selected);
+}
