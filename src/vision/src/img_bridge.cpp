@@ -123,13 +123,24 @@ cv::Mat toCVMat(const sensor_msgs::msg::Image &source) {
 
     // Special handling for NV12 format
     if (source.encoding == "nv12") {
-        // NV12 format: Y plane followed by interleaved UV plane
-        int width = source.width;
-        int height = source.height;
-        
-        // Create a cv::Mat for the NV12 data
-        cv::Mat nv12(height * 3 / 2, width, CV_8UC1);
-        std::memcpy(nv12.data, source.data.data(), source.data.size());
+        // NV12 has a Y plane followed by interleaved UV rows, using the same
+        // stride. Copy pixels row by row; source.data can include padding.
+        const int width = source.width;
+        const int height = source.height;
+        if (width <= 0 || height <= 0 || width % 2 != 0 || height % 2 != 0) {
+            throw Exception("NV12 image requires positive, even width and height");
+        }
+        const size_t row_bytes = static_cast<size_t>(width);
+        const size_t step = source.step == 0 ? row_bytes : source.step;
+        const size_t rows = static_cast<size_t>(height) * 3 / 2;
+        if (step < row_bytes || source.data.size() < step * rows) {
+            throw Exception("NV12 image has invalid step/data size");
+        }
+        cv::Mat nv12(static_cast<int>(rows), width, CV_8UC1);
+        for (size_t row = 0; row < rows; ++row) {
+            std::memcpy(nv12.ptr<uint8_t>(static_cast<int>(row)),
+                        source.data.data() + row * step, row_bytes);
+        }
         
         // Convert NV12 to BGR format
         cv::Mat bgr_mat;
@@ -139,12 +150,20 @@ cv::Mat toCVMat(const sensor_msgs::msg::Image &source) {
 
     // special handling for bgra8
     if (source.encoding == enc::BGRA8) {
-        int width = source.width;
-        int height = source.height;
-
-        // Create a cv::Mat for the BGRA data
+        const int width = source.width;
+        const int height = source.height;
+        const size_t row_bytes = static_cast<size_t>(width) * 4;
+        const size_t step = source.step == 0 ? row_bytes : source.step;
+        if (width <= 0 || height <= 0 || step < row_bytes ||
+            source.data.size() < step * static_cast<size_t>(height)) {
+            throw Exception("BGRA image has invalid dimensions/step/data size");
+        }
         cv::Mat bgra_mat(height, width, CV_8UC4);
-        std::memcpy(bgra_mat.data, source.data.data(), source.data.size());
+        for (int row = 0; row < height; ++row) {
+            std::memcpy(bgra_mat.ptr<uint8_t>(row),
+                        source.data.data() + static_cast<size_t>(row) * step,
+                        row_bytes);
+        }
 
         // Convert BGRA to BGR format
         cv::Mat bgr_mat;
@@ -208,6 +227,25 @@ cv::Mat toCVMat(const sensor_msgs::msg::Image &source) {
         }
     }
     return converted;
+}
+
+cv::Mat toBGRMat(const sensor_msgs::msg::Image &source) {
+    cv::Mat image = toCVMat(source);
+    if (image.empty()) {
+        throw Exception("Color image is empty");
+    }
+    if (source.encoding == enc::RGB8) {
+        cv::cvtColor(image, image, cv::COLOR_RGB2BGR);
+    } else if (source.encoding == enc::RGBA8) {
+        cv::cvtColor(image, image, cv::COLOR_RGBA2BGR);
+    } else if (source.encoding == enc::MONO8) {
+        cv::cvtColor(image, image, cv::COLOR_GRAY2BGR);
+    }
+    // toCVMat already converts NV12/BGRA8 to BGR and preserves BGR8.
+    if (image.type() != CV_8UC3) {
+        throw Exception("Unsupported color image encoding [" + source.encoding + "]");
+    }
+    return image;
 }
 
 } // namespace booster_vision

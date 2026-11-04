@@ -1,6 +1,11 @@
 #include "booster_vision/vision_node.h"
 
+#include <chrono>
+#include <future>
+#include <thread>
 #include <vector>
+
+#include <opencv2/highgui.hpp>
 
 int main(int argc, char **argv) {
     if (argc < 2) {
@@ -33,7 +38,58 @@ int main(int argc, char **argv) {
 
     rclcpp::executors::MultiThreadedExecutor executor(rclcpp::ExecutorOptions(), 4);
     executor.add_node(node);
-    executor.spin();
 
-    return 0;
+    if (!node->VisualizationEnabled()) {
+        executor.spin();
+        rclcpp::shutdown();
+        return 0;
+    }
+
+    // A mutually exclusive ROS callback group does not pin callbacks to one
+    // thread. Keep every HighGUI call on the main thread; inference and sensor
+    // synchronization continue on the executor threads.
+    auto spin_future = std::async(std::launch::async, [&executor]() {
+        executor.spin();
+    });
+    int exit_code = 0;
+    bool windows_created = false;
+    RCLCPP_INFO(node->get_logger(), "[vision][display] HighGUI runs on the main thread");
+    try {
+        while (rclcpp::ok() &&
+               spin_future.wait_for(std::chrono::milliseconds(0)) != std::future_status::ready) {
+            auto frames = node->TakeVisualizationFrames();
+            if (!frames.first.empty()) {
+                windows_created = true;
+                cv::imshow("Detection", frames.first);
+            }
+            if (!frames.second.empty()) {
+                windows_created = true;
+                cv::imshow("Segmentation", frames.second);
+            }
+            // Pump events even when inference is slow or no new frame arrives.
+            if (windows_created) {
+                cv::waitKey(1);
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+    } catch (const std::exception &e) {
+        RCLCPP_ERROR(node->get_logger(), "Visualization failed: %s", e.what());
+        exit_code = -3;
+    }
+
+    // Shutdown also handles the case where the executor has not entered spin
+    // yet. Join it before destroying node-owned buffers or GUI windows.
+    rclcpp::shutdown();
+    executor.cancel();
+    try {
+        spin_future.get();
+    } catch (const std::exception &e) {
+        RCLCPP_ERROR(node->get_logger(), "Vision executor failed: %s", e.what());
+        exit_code = -3;
+    }
+    if (windows_created) {
+        cv::destroyAllWindows();
+    }
+
+    return exit_code;
 }

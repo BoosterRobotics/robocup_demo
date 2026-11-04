@@ -29,8 +29,7 @@ cv::Mat YoloV8Segmentor::DrawSegmentation(const cv::Mat &img, const std::vector<
         return class_colors[class_id];
     };
 
-    cv::Mat img_out;
-    cv::cvtColor(img, img_out, cv::COLOR_RGB2BGR);
+    cv::Mat img_out = img.clone();
     for (const auto &seg : segmentations) {
         auto display_color = get_color_for_class(seg.class_id);
         for (int y = seg.bbox.y; y < seg.bbox.y + seg.bbox.height; y++) {

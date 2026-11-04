@@ -8,6 +8,10 @@ namespace booster_vision {
 
 cv::Mat toCVMat(const sensor_msgs::msg::Image &source);
 
+// Normalize color messages to owned CV_8UC3 BGR pixels for inference/display.
+// Use the message encoding, not the configured camera model, for conversion.
+cv::Mat toBGRMat(const sensor_msgs::msg::Image &source);
+
 // sensor_msgs::msg::Image::SharedPtr
 
 } // namespace booster_vision

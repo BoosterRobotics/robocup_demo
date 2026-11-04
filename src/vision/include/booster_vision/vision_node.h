@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <mutex>
 #include <shared_mutex>
+#include <utility>
 
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/image.hpp>
@@ -26,6 +27,7 @@
 #include <yaml-cpp/yaml.h>
 
 #include "booster_vision/base/intrin.h"
+#include "booster_vision/base/latest_image_buffer.hpp"
 #include "booster_vision/base/pose.h"
 
 #include "booster_vision/color_classifier.hpp"
@@ -56,6 +58,12 @@ public:
     void CalParamCallback(const vision_interface::msg::CalParam::ConstSharedPtr msg);
     void ProcessData(SyncedDataBlock &synced_data, vision_interface::msg::Detections &detections);
     void ProcessSegmentationData(SyncedDataBlock &synced_data, vision_interface::msg::LineSegments &field_line_segs_msg);
+
+    bool VisualizationEnabled() const { return show_det_ || show_seg_; }
+    // The main thread alone owns the HighGUI windows and event loop.
+    std::pair<cv::Mat, cv::Mat> TakeVisualizationFrames() {
+        return {detection_visualization_.Take(), segmentation_visualization_.Take()};
+    }
 
 private:
     enum class IntrinsicsSource {
@@ -93,6 +101,8 @@ private:
     double depth_sync_wait_timeout_ms_ = 12.0;
     bool show_det_ = false;
     bool show_seg_ = false;
+    LatestImageBuffer detection_visualization_;
+    LatestImageBuffer segmentation_visualization_;
     bool save_data_ = false;
     bool save_depth_ = false;
     bool offline_mode_ = false;
@@ -135,6 +145,7 @@ private:
     double pose_sync_wait_timeout_ms_ = 12.0;
     std::atomic<bool> head_pose_input_log_printed_{false};
     std::atomic<bool> invalid_head_pose_log_printed_{false};
+    std::atomic<bool> color_input_log_printed_{false};
     std::atomic<uint64_t> color_frames_received_{0};
     std::atomic<uint64_t> color_frames_processing_started_{0};
     std::atomic<uint64_t> color_frames_completed_{0};

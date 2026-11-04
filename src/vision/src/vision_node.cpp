@@ -1503,9 +1503,8 @@ void VisionNode::ProcessData(SyncedDataBlock &synced_data, vision_interface::msg
 
     // show vision results
     if (show_det_) {
-        cv::Mat color_rgb;
-        cv::cvtColor(color, color_rgb, cv::COLOR_BGR2RGB);
-        cv::Mat img_out = YoloV8Detector::DrawDetection(color_rgb, detections_for_display);
+        // Color callbacks normalize to BGR, which HighGUI also expects.
+        cv::Mat img_out = YoloV8Detector::DrawDetection(color, detections_for_display);
         const size_t draw_count = std::min(
             detections_for_display.size(), detection_xy_for_display.size());
         for (size_t i = 0; i < draw_count; ++i) {
@@ -1539,18 +1538,7 @@ void VisionNode::ProcessData(SyncedDataBlock &synced_data, vision_interface::msg
                         cv::FONT_HERSHEY_SIMPLEX, 0.45,
                         cv::Scalar(255, 255, 0), 1, cv::LINE_AA);
         }
-        cv::imshow("Detection", img_out);
-
-        // color jet depth_float and show
-        // if (!depth_float.empty()) {
-        //     cv::Mat depth_colormap;
-        //     cv::normalize(depth_float, depth_float, 0, 255, cv::NORM_MINMAX);
-        //     depth_float.convertTo(depth_float, CV_8U);
-        //     cv::applyColorMap(depth_float, depth_colormap, cv::COLORMAP_JET);
-        //     cv::imshow("Depth", depth_colormap);
-        // }
-
-        cv::waitKey(1);
+        detection_visualization_.Store(img_out);
     }
 
     if (save_data_) {
@@ -1586,7 +1574,7 @@ void VisionNode::ColorCallback(const sensor_msgs::msg::Image::ConstSharedPtr &ms
     cv::Mat img;
     try {
         // cv_ptr = cv_bridge::toCvCopy(msg, msg->encoding);
-        img = toCVMat(*msg);
+        img = toBGRMat(*msg);
     } catch (std::exception &e) {
         RCLCPP_WARN(get_logger(), "Unable to decode color image: %s", e.what());
         processing_stage_.store(
@@ -1594,8 +1582,14 @@ void VisionNode::ColorCallback(const sensor_msgs::msg::Image::ConstSharedPtr &ms
         return;
     }
 
-    if (camera_type_ == "realsense") {
-        cv::cvtColor(img, img, cv::COLOR_RGB2BGR);
+    if (!color_input_log_printed_.exchange(true)) {
+        const cv::Scalar mean = cv::mean(img);
+        RCLCPP_INFO(
+            get_logger(),
+            "[vision][color input] encoding=%s size=%ux%u step=%u "
+            "decoded=bgr8 mean=[%.1f, %.1f, %.1f]",
+            msg->encoding.c_str(), msg->width, msg->height, msg->step,
+            mean[0], mean[1], mean[2]);
     }
 
     vision_interface::msg::Detections detection_msg;
@@ -1671,8 +1665,7 @@ void VisionNode::ProcessSegmentationData(SyncedDataBlock &synced_data, vision_in
     if (show_seg_) {
         cv::Mat img_out = YoloV8Segmentor::DrawSegmentation(color, segmentations);
         img_out = DrawFieldLineSegments(img_out, field_line_segs);
-        cv::imshow("Segmentation", img_out);
-        cv::waitKey(1);
+        segmentation_visualization_.Store(img_out);
     }
 }
 
@@ -1694,7 +1687,7 @@ void VisionNode::SegmentationCallback(const sensor_msgs::msg::Image::ConstShared
     cv::Mat img;
     try {
         // cv_ptr = cv_bridge::toCvCopy(msg, msg->encoding);
-        img = toCVMat(*msg).clone();
+        img = toBGRMat(*msg);
     } catch (std::exception &e) {
         RCLCPP_WARN(
             get_logger(), "Unable to decode segmentation image: %s", e.what());

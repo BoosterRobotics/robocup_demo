@@ -157,7 +157,7 @@ brain_node:
       robot_depth_fusion_distance: 0.5 # Deduplication distance between RGB robots and depth cells (m)
       robot_depth_fusion_max_age_msecs: 250.0 # Use only fresh visual robots for depth deduplication
       upright_robot_radius: 0.6 # Safety radius for upright robots (m)
-      fallen_robot_radius: 0.85 # Safety radius for fallen robots (m)
+      fallen_robot_radius: 0.5 # Safety radius for fallen robots (m)
       max_robot_footprint_width: 1.8 # Cap footprint width inflated by near-horizon projection (m)
       max_robot_footprint_radius_increase: 0.15 # Maximum footprint contribution to the final safety radius (m)
       robot_path_clearance: 0.12 # Additional visibility-graph clearance around robots (m)
@@ -183,8 +183,8 @@ brain_node:
       log_max_size_mb: 10.0 # Maximum size of one log file
       log_max_files: 3 # Retain obstacle_avoidance.log.1 through .3
       blocked_recovery_turn_rate: 0.5 # Turn slowly to refresh perception when no translation is feasible (rad/s)
-      fallen_robot_distance: 3.0 # Maximum distance for fallen-robot avoidance and VisualKick protection (m)
-      fallen_robot_angle: 0.7853981633974483 # VisualKick forward protection half-angle; default +/-45 degrees (rad)
+      fallen_robot_distance: 0.5 # Maximum distance for fallen-robot avoidance and VisualKick protection (m)
+      fallen_robot_angle: 0.3453981633974483 # VisualKick forward protection half-angle; default +/-45 degrees (rad)
       enable_fallen_robot_visual_kick_exit: true # Allow fallen-robot detections to block or exit VisualKick
       avoid_during_kick: false 
       kick_ao_safe_dist: 1.5 
